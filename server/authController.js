@@ -37,6 +37,23 @@ async function verifyRecaptcha(token) {
 }
 
 // ─────────────────────────────────────────────
+// HELPER: Tự detect Base URL từ request
+// Ưu tiên: biến môi trường BASE_URL (nếu đã set đúng trên render.com)
+// Fallback: lấy từ request headers (x-forwarded-proto + host)
+// ─────────────────────────────────────────────
+function getBaseUrl(req) {
+  const envUrl = process.env.BASE_URL;
+  // Nếu env đã được set và không trỏ vào localhost → dùng ngay
+  if (envUrl && !envUrl.includes('localhost') && !envUrl.includes('127.0.0.1')) {
+    return envUrl.replace(/\/$/, ''); // xóa trailing slash nếu có
+  }
+  // Fallback: tự build từ headers của request (hoạt động trên render.com, Railway, v.v.)
+  const proto = req.headers['x-forwarded-proto'] || req.protocol || 'https';
+  const host  = req.headers['x-forwarded-host']  || req.headers.host;
+  return `${proto}://${host}`;
+}
+
+// ─────────────────────────────────────────────
 // HELPER: Lấy IP thực của request
 // (hỗ trợ proxy/load balancer qua x-forwarded-for)
 // ─────────────────────────────────────────────
@@ -115,7 +132,8 @@ async function register(req, res) {
     ).run(userId, token, expiresAt);
 
     // 8. Gửi email xác thực (không block response nếu lỗi SMTP)
-    sendVerificationEmail(email, name, token).catch(err =>
+    const baseUrl = getBaseUrl(req);
+    sendVerificationEmail(email, name, token, baseUrl).catch(err =>
       console.error('[Auth] Gửi email thất bại:', err.message)
     );
 
@@ -302,7 +320,8 @@ async function forgotPassword(req, res) {
     ).run(user.id, token, expiresAt);
 
     // Gửi email (không block response nếu lỗi SMTP)
-    sendPasswordResetEmail(user.email, user.name, token).catch(err =>
+    const baseUrl = getBaseUrl(req);
+    sendPasswordResetEmail(user.email, user.name, token, baseUrl).catch(err =>
       console.error('[Auth] Gửi email reset thất bại:', err.message)
     );
 

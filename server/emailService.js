@@ -23,9 +23,11 @@ const transporter = nodemailer.createTransport({
  * @param {string} toEmail  - Email người nhận
  * @param {string} toName   - Tên người nhận
  * @param {string} token    - UUID token xác thực
+ * @param {string} baseUrl  - Base URL của server (auto-detect từ request)
  */
-async function sendVerificationEmail(toEmail, toName, token) {
-  const verifyUrl = `${process.env.BASE_URL}/api/auth/verify/${token}`;
+async function sendVerificationEmail(toEmail, toName, token, baseUrl) {
+  const base      = baseUrl || process.env.BASE_URL || 'http://localhost:3000';
+  const verifyUrl = `${base}/api/auth/verify/${token}`;
 
   const mailOptions = {
     from:    process.env.SMTP_FROM || '"Army News VNAR" <no-reply@armynews.vn>',
@@ -95,9 +97,11 @@ async function sendVerificationEmail(toEmail, toName, token) {
  * @param {string} toEmail  - Email người nhận
  * @param {string} toName   - Tên người nhận
  * @param {string} token    - UUID token đặt lại mật khẩu
+ * @param {string} baseUrl  - Base URL của server (auto-detect từ request)
  */
-async function sendPasswordResetEmail(toEmail, toName, token) {
-  const resetUrl = `${process.env.BASE_URL}/reset-password?token=${token}`;
+async function sendPasswordResetEmail(toEmail, toName, token, baseUrl) {
+  const base     = baseUrl || process.env.BASE_URL || 'http://localhost:3000';
+  const resetUrl = `${base}/reset-password?token=${token}`;
 
   const mailOptions = {
     from:    process.env.SMTP_FROM || '"Army News VNAR" <no-reply@armynews.vn>',

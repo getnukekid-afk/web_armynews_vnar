@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Quản lý Bài báo – Army News VNAR</title>
+  <meta name="description" content="Dashboard quản lý nội dung bài báo">
+  <link rel="stylesheet" href="/css/style.css">
+  <link rel="stylesheet" href="/css/layout.css">
+</head>
+<body>
+
+<div class="site-wrapper">
+
+  <!-- ══ HEADER ══ -->
+  <header class="site-header">
+    <div class="container">
+      <div class="header-top">
+        <a href="/" class="site-logo">
+          <div class="site-logo-icon">⚑</div>
+          <div class="site-logo-text">
+            <div class="site-logo-name">ARMY NEWS VNAR</div>
+            <div class="site-logo-tagline">Hệ thống quản lý nội dung</div>
+          </div>
+        </a>
+        <div class="header-user">
+          <span class="header-user-name" id="user-name">...</span>
+          <span class="header-user-role" id="user-role-badge"></span>
+          <a href="/" class="btn btn-ghost btn-sm">← Trang chủ</a>
+          <button class="btn btn-ghost btn-sm" onclick="handleLogout()">Đăng xuất</button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- ══ CMS MAIN ══ -->
+  <main class="site-main">
+    <div class="container">
+      <div class="cms-layout">
+
+        <!-- Sidebar CMS -->
+        <div class="cms-sidebar">
+          <div class="cms-sidebar-header">
+            <div class="cms-sidebar-title">📝 Quản lý nội dung</div>
+            <div class="cms-sidebar-subtitle" id="cms-user-info">Editor</div>
+          </div>
+          <nav class="cms-nav">
+            <button class="cms-nav-item active" onclick="showPanel('list')" id="nav-list">
+              📋 Danh sách bài
+            </button>
+            <button class="cms-nav-item" onclick="showPanel('new')" id="nav-new">
+              ✏️ Viết bài mới
+            </button>
+          </nav>
+        </div>
+
+        <!-- CMS Main Panel -->
+        <div class="cms-main">
+
+          <!-- ── Panel: Danh sách bài ── -->
+          <div class="cms-panel" id="panel-list">
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom: var(--space-6); padding-bottom: var(--space-4); border-bottom: 2px solid var(--color-primary);">
+              <h2 class="cms-panel-title" style="margin:0; border:none; padding:0;">📋 Danh sách bài</h2>
+              <button class="btn btn-primary btn-sm" onclick="showPanel('new')">+ Viết bài mới</button>
+            </div>
+
+            <div id="cms-articles-loading" class="text-center" style="padding: var(--space-10);">
+              <div class="spinner" style="margin:0 auto;"></div>
+            </div>
+
+            <div class="table-container" id="cms-table-container" style="display:none;">
+              <table class="data-table" id="cms-table">
+                <thead>
+                  <tr>
+                    <th>Tiêu đề</th>
+                    <th>Danh mục</th>
+                    <th>Tác giả</th>
+                    <th>Trạng thái</th>
+                    <th>Cập nhật</th>
+                    <th>Thao tác</th>
+                  </tr>
+                </thead>
+                <tbody id="cms-table-body"></tbody>
+              </table>
+            </div>
+
+            <div id="cms-empty" style="display:none;" class="empty-state">
+              <div class="empty-state-icon">📄</div>
+              <h3 class="empty-state-title">Chưa có bài nào</h3>
+              <p class="empty-state-desc">Bắt đầu viết bài đầu tiên của bạn!</p>
+              <button class="btn btn-primary" style="margin-top: var(--space-5);" onclick="showPanel('new')">
+                ✏️ Viết bài mới
+              </button>
+            </div>
+          </div>
+
+          <!-- ── Panel: Viết / Sửa bài ── -->
+          <div class="cms-panel" id="panel-new" style="display:none;">
+            <h2 class="cms-panel-title" id="article-form-title">✏️ Viết bài mới</h2>
+
+            <div id="form-alert" class="alert" style="display:none;">
+              <span class="alert-icon" id="form-alert-icon">⚠️</span>
+              <span id="form-alert-text"></span>
+            </div>
+
+            <form id="article-form" novalidate>
+              <input type="hidden" id="editing-id" value="">
+
+              <div class="form-group">
+                <label class="form-label" for="art-title">Tiêu đề bài báo *</label>
+                <input class="form-control" type="text" id="art-title" placeholder="Nhập tiêu đề bài báo..." required>
+                <span class="form-error" id="art-title-error"></span>
+              </div>
+
+              <div style="display:grid; grid-template-columns: 1fr 1fr; gap: var(--space-4);">
+                <div class="form-group">
+                  <label class="form-label" for="art-category">Danh mục</label>
+                  <select class="form-control" id="art-category">
+                    <option value="">-- Chọn danh mục --</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="art-image">URL Ảnh đại diện</label>
+                  <input class="form-control" type="url" id="art-image" placeholder="https://example.com/image.jpg">
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label" for="art-summary">Tóm tắt bài</label>
+                <textarea class="form-control" id="art-summary" rows="3" placeholder="Mô tả ngắn về nội dung bài báo (hiển thị ở trang chủ)..."></textarea>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label" for="art-content">Nội dung bài báo *</label>
+                <textarea class="form-control" id="art-content" rows="16" placeholder="Viết nội dung bài báo tại đây...
+Bạn có thể dùng các thẻ HTML cơ bản: &lt;p&gt;, &lt;h2&gt;, &lt;h3&gt;, &lt;strong&gt;, &lt;em&gt;, &lt;blockquote&gt;" required style="min-height: 360px;"></textarea>
+                <span class="form-error" id="art-content-error"></span>
+                <span class="form-hint">Hỗ trợ HTML cơ bản: &lt;p&gt;, &lt;h2&gt;, &lt;h3&gt;, &lt;strong&gt;, &lt;em&gt;, &lt;blockquote&gt;</span>
+              </div>
+
+              <div style="display:flex; gap: var(--space-3); align-items:center; flex-wrap: wrap;">
+                <button type="submit" class="btn btn-primary" id="save-draft-btn">💾 Lưu Draft</button>
+                <button type="button" class="btn btn-success" id="save-publish-btn" onclick="submitAndPublish()">🚀 Lưu & Đăng tải</button>
+                <button type="button" class="btn btn-ghost" onclick="showPanel('list')">Hủy</button>
+              </div>
+            </form>
+          </div>
+
+        </div><!-- /.cms-main -->
+      </div><!-- /.cms-layout -->
+    </div>
+  </main>
+
+  <footer class="site-footer" style="padding: var(--space-4) 0;">
+    <div class="container">
+      <div class="footer-bottom">
+        <span>© 2024 Army News VNAR – Dashboard CMS</span>
+      </div>
+    </div>
+  </footer>
+
+</div>
+
+<!-- Confirm delete modal -->
+<div class="modal-overlay" id="delete-modal" style="display:none;">
+  <div class="modal">
+    <h3 class="modal-title">⚠️ Xác nhận xóa bài</h3>
+    <p style="color: var(--color-gray-600); font-size: var(--text-sm);">Bạn có chắc muốn xóa bài báo này không? Hành động này không thể hoàn tác.</p>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="document.getElementById('delete-modal').style.display='none'">Hủy</button>
+      <button class="btn btn-danger" id="confirm-delete-btn">Xóa bài</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast-container" id="toast-container"></div>
+
+<script src="/js/frontend.js"></script>
+<script src="/js/cms.js"></script>
+<script>
+  initCmsPage();
+</script>
+</body>
+</html>

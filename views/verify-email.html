@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Xác thực Email – Army News VNAR</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <link rel="stylesheet" href="/css/layout.css">
+  <style>
+    .verify-page {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(160deg, var(--color-dark) 0%, var(--color-primary-dark) 100%);
+      padding: var(--space-6);
+    }
+    .verify-card {
+      background: var(--color-white);
+      border-radius: var(--radius-xl);
+      box-shadow: var(--shadow-xl);
+      padding: var(--space-12) var(--space-10);
+      max-width: 460px;
+      width: 100%;
+      text-align: center;
+      animation: fadeInUp 0.4s ease;
+    }
+    .verify-icon {
+      font-size: 5rem;
+      margin-bottom: var(--space-5);
+    }
+    .verify-title {
+      font-family: var(--font-serif);
+      font-size: var(--text-2xl);
+      color: var(--color-dark);
+      margin-bottom: var(--space-3);
+    }
+    .verify-desc {
+      color: var(--color-gray-600);
+      line-height: 1.7;
+      margin-bottom: var(--space-8);
+    }
+  </style>
+</head>
+<body>
+
+<div class="verify-page">
+  <div class="verify-card" id="verify-card">
+    <!-- Nội dung sẽ được JS render dựa vào query param ?status= -->
+  </div>
+</div>
+
+<script>
+  // Đọc query param ?status= và hiển thị nội dung phù hợp
+  const params = new URLSearchParams(window.location.search);
+  const status = params.get('status');
+  const card   = document.getElementById('verify-card');
+
+  const states = {
+    success: {
+      icon:  '✅',
+      title: 'Xác thực thành công!',
+      desc:  'Email của bạn đã được xác thực. Tài khoản đã sẵn sàng để sử dụng.',
+      btnText: 'Đăng nhập ngay',
+      btnHref: '/login',
+      btnClass: 'btn-primary',
+    },
+    invalid: {
+      icon:  '❌',
+      title: 'Link không hợp lệ',
+      desc:  'Link xác thực này không tồn tại hoặc đã được sử dụng. Vui lòng đăng ký lại.',
+      btnText: 'Về trang đăng ký',
+      btnHref: '/register',
+      btnClass: 'btn-outline',
+    },
+    expired: {
+      icon:  '⏰',
+      title: 'Link đã hết hạn',
+      desc:  'Link xác thực có hiệu lực 24 giờ và đã hết hạn. Vui lòng đăng ký tài khoản mới.',
+      btnText: 'Đăng ký lại',
+      btnHref: '/register',
+      btnClass: 'btn-outline',
+    },
+    error: {
+      icon:  '⚠️',
+      title: 'Đã xảy ra lỗi',
+      desc:  'Không thể xác thực email lúc này. Vui lòng thử lại sau.',
+      btnText: 'Về trang chủ',
+      btnHref: '/',
+      btnClass: 'btn-ghost',
+    },
+  };
+
+  const state = states[status] || states['error'];
+
+  card.innerHTML = `
+    <div class="verify-icon">${state.icon}</div>
+    <h1 class="verify-title">${state.title}</h1>
+    <p class="verify-desc">${state.desc}</p>
+    <a href="${state.btnHref}" class="btn ${state.btnClass} btn-lg">${state.btnText}</a>
+    <div style="margin-top: var(--space-5);">
+      <a href="/" style="font-size: var(--text-sm); color: var(--color-gray-400);">← Về trang chủ</a>
+    </div>
+  `;
+</script>
+</body>
+</html>

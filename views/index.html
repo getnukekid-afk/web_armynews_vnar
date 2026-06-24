@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Army News VNAR – Báo Điện Tử Quân Đội Nhân Dân Việt Nam</title>
+  <meta name="description"
+    content="Cổng thông tin điện tử quân đội – Tin tức chính trị, quân sự, kinh tế, văn hóa VNAR">
+  <link rel="stylesheet" href="/css/style.css">
+  <link rel="stylesheet" href="/css/layout.css">
+</head>
+
+<body>
+
+  <div class="site-wrapper">
+
+    <!-- ══ SITE HEADER ══ -->
+    <header class="site-header" id="site-header">
+      <div class="container">
+        <div class="header-top">
+          <!-- Logo -->
+          <a href="/" class="site-logo">
+            <div class="site-logo-icon">⚑</div>
+            <div class="site-logo-text">
+              <div class="site-logo-name">ARMY NEWS VNAR</div>
+              <div class="site-logo-tagline">Báo Điện Tử Quân Đội Nhân Dân Việt Nam</div>
+            </div>
+          </a>
+
+          <!-- User info + actions -->
+          <div class="header-user">
+            <span class="header-user-name" id="user-name">...</span>
+            <span class="header-user-role" id="user-role-badge"></span>
+            <!-- Nút CMS/Admin sẽ được inject bởi JS nếu có quyền -->
+            <span id="cms-btn-slot"></span>
+            <button class="btn btn-ghost btn-sm" id="logout-btn" onclick="handleLogout()">Đăng xuất</button>
+            <!-- Hamburger menu (mobile) -->
+            <button class="hamburger" id="hamburger" aria-label="Menu" onclick="toggleMenu()">
+              <span></span><span></span><span></span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Navigation categories -->
+        <nav class="header-nav" id="header-nav" aria-label="Danh mục tin tức">
+          <a class="nav-link active" href="/" data-cat="">Trang chủ</a>
+          <!-- Các danh mục sẽ được JS inject vào đây -->
+          <span id="nav-categories"></span>
+        </nav>
+      </div>
+    </header>
+
+    <!-- ══ BREAKING NEWS TICKER ══ -->
+    <div class="breaking-bar" id="breaking-bar" style="display:none;">
+      <div class="container">
+        <div class="breaking-inner">
+          <span class="breaking-label">⚡ TIN MỚI</span>
+          <div class="breaking-ticker">
+            <span class="breaking-ticker-inner" id="breaking-ticker-text"></span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ MAIN CONTENT ══ -->
+    <main class="site-main">
+      <div class="container">
+
+        <!-- Loading skeleton -->
+        <div id="loading-indicator" class="text-center" style="padding: var(--space-16);">
+          <div class="spinner" style="margin: 0 auto;"></div>
+          <p style="margin-top: var(--space-4); color: var(--color-gray-400);">Đang tải tin tức...</p>
+        </div>
+
+        <!-- Main content: sẽ được JS render -->
+        <div id="home-content" style="display:none;">
+
+          <!-- Category filter bar -->
+          <div style="display:flex; gap: var(--space-2); flex-wrap: wrap; margin-bottom: var(--space-6);"
+            id="cat-filter-bar"></div>
+
+          <div class="home-grid">
+            <!-- Content area -->
+            <div class="content-area">
+              <!-- Featured article -->
+              <div id="featured-article-slot"></div>
+
+              <!-- Section: Tin mới nhất -->
+              <div class="section-header">
+                <h2 class="section-title">Tin Mới Nhất</h2>
+                <a class="section-link" id="see-more-link" href="#">Xem thêm →</a>
+              </div>
+
+              <!-- Articles grid -->
+              <div class="articles-grid" id="articles-grid"></div>
+
+              <!-- Pagination -->
+              <div class="pagination" id="pagination"></div>
+            </div>
+
+            <!-- Sidebar -->
+            <aside class="sidebar">
+              <div class="sidebar-widget">
+                <div class="sidebar-widget-header">
+                  <h3 class="sidebar-widget-title">📌 Tin Nổi Bật</h3>
+                </div>
+                <div class="sidebar-widget-body">
+                  <div class="articles-list" id="sidebar-latest"></div>
+                </div>
+              </div>
+
+              <div class="sidebar-widget">
+                <div class="sidebar-widget-header">
+                  <h3 class="sidebar-widget-title">📂 Danh Mục</h3>
+                </div>
+                <div class="sidebar-widget-body">
+                  <div id="sidebar-categories"></div>
+                </div>
+              </div>
+            </aside>
+          </div>
+        </div>
+
+        <!-- Empty state (khi chưa có bài nào) -->
+        <div id="empty-state" style="display:none;" class="empty-state">
+          <div class="empty-state-icon">📰</div>
+          <h3 class="empty-state-title">Chưa có bài báo nào</h3>
+          <p class="empty-state-desc">Hiện chưa có bài báo nào được đăng tải. Hãy quay lại sau.</p>
+        </div>
+
+      </div>
+    </main>
+
+    <!-- ══ FOOTER ══ -->
+    <footer class="site-footer">
+      <div class="container">
+        <div class="footer-grid">
+          <div>
+            <div class="footer-brand-name">⚑ ARMY NEWS VNAR</div>
+            <p class="footer-brand-desc">Báo điện tử Quân đội nhân dân VNAR – Cơ quan ngôn luận của Quân đội nhân
+              dân, tiếng nói của lực lượng vũ trang và nhân dân.</p>
+          </div>
+          <div>
+            <div class="footer-col-title">Chuyên mục</div>
+            <div class="footer-links" id="footer-categories"></div>
+          </div>
+          <div>
+            <div class="footer-col-title">Liên kết</div>
+            <div class="footer-links">
+              <a class="footer-link" href="/">Trang chủ</a>
+              <a class="footer-link" href="/login">Đăng nhập</a>
+              <a class="footer-link" href="/register">Đăng ký</a>
+            </div>
+          </div>
+        </div>
+        <div class="footer-bottom">
+          <span>© 2026 Army News VNAR. Bảo lưu mọi quyền.</span>
+          <span>Mọi bài báo trên thuộc quyền sở hữu của VNAR, chỉ mang tính chất giải trí, không liên quan đến nước Cộng
+            Hòa Xã Hội Chủ Nghĩa Việt Nam</span>
+        </div>
+      </div>
+    </footer>
+
+  </div><!-- /.site-wrapper -->
+
+  <!-- Toast container -->
+  <div class="toast-container" id="toast-container"></div>
+
+  <script src="/js/frontend.js"></script>
+  <script>
+    // Khởi động trang chủ
+    initHomePage();
+  </script>
+</body>
+
+</html>

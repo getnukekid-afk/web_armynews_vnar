@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Đăng ký – Army News VNAR</title>
+  <meta name="description" content="Tạo tài khoản mới tại Army News VNAR">
+  <link rel="stylesheet" href="/css/style.css">
+  <link rel="stylesheet" href="/css/layout.css">
+</head>
+<body>
+
+<div class="auth-page">
+  <!-- ── Panel Branding (trái) ── -->
+  <div class="auth-brand">
+    <div class="auth-brand-logo">⚑</div>
+    <div class="auth-brand-name">ARMY NEWS VNAR</div>
+    <p class="auth-brand-tagline">Tham gia cộng đồng đọc báo quân đội uy tín, được cập nhật hàng ngày</p>
+
+    <div class="auth-brand-features">
+      <div class="auth-brand-feature">
+        <div class="auth-brand-feature-icon">✅</div>
+        <span>Đăng ký miễn phí, xác thực email</span>
+      </div>
+      <div class="auth-brand-feature">
+        <div class="auth-brand-feature-icon">📋</div>
+        <span>Mỗi địa chỉ IP chỉ một tài khoản</span>
+      </div>
+      <div class="auth-brand-feature">
+        <div class="auth-brand-feature-icon">🛡️</div>
+        <span>Thông tin bảo mật và được mã hóa</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Form đăng ký (phải) ── -->
+  <div class="auth-form-side">
+    <div class="auth-form-header">
+      <h1 class="auth-form-title">Tạo tài khoản</h1>
+      <p class="auth-form-subtitle">Điền thông tin bên dưới để đăng ký tài khoản mới.</p>
+    </div>
+
+    <!-- Alert box -->
+    <div id="alert-box" style="display:none;" class="alert">
+      <span class="alert-icon" id="alert-icon">⚠️</span>
+      <span id="alert-text"></span>
+    </div>
+
+    <form id="register-form" novalidate>
+      <div class="form-group">
+        <label class="form-label" for="name">Họ và tên</label>
+        <input
+          class="form-control"
+          type="text"
+          id="name"
+          name="name"
+          placeholder="Nguyễn Văn A"
+          autocomplete="name"
+          required
+        >
+        <span class="form-error" id="name-error"></span>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="email">Địa chỉ Email</label>
+        <input
+          class="form-control"
+          type="email"
+          id="email"
+          name="email"
+          placeholder="example@email.com"
+          autocomplete="email"
+          required
+        >
+        <span class="form-error" id="email-error"></span>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="password">Mật khẩu</label>
+        <input
+          class="form-control"
+          type="password"
+          id="password"
+          name="password"
+          placeholder="Tối thiểu 6 ký tự"
+          autocomplete="new-password"
+          required
+        >
+        <span class="form-error" id="password-error"></span>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="confirm-password">Xác nhận mật khẩu</label>
+        <input
+          class="form-control"
+          type="password"
+          id="confirm-password"
+          name="confirmPassword"
+          placeholder="Nhập lại mật khẩu"
+          autocomplete="new-password"
+          required
+        >
+        <span class="form-error" id="confirm-password-error"></span>
+      </div>
+
+      <!-- Google reCAPTCHA -->
+      <div class="form-group">
+        <label class="form-label">Xác nhận bạn không phải robot</label>
+        <div id="recaptcha-container" style="margin-top: var(--space-1);"></div>
+        <span class="form-error" id="captcha-error"></span>
+      </div>
+
+      <button type="submit" class="btn btn-primary btn-full btn-lg" id="submit-btn">
+        Tạo tài khoản
+      </button>
+    </form>
+
+    <div class="auth-form-footer">
+      Đã có tài khoản?
+      <a href="/login" style="color: var(--color-primary); font-weight: 600;">Đăng nhập</a>
+    </div>
+  </div>
+</div>
+
+<!-- Toast container -->
+<div class="toast-container" id="toast-container"></div>
+
+<script src="/js/auth.js"></script>
+<script>
+  // Khởi tạo trang register
+  initRecaptcha();
+
+  document.getElementById('register-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    await handleRegister();
+  });
+</script>
+</body>
+</html>

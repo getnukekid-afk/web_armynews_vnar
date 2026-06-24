@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Đăng nhập – Army News VNAR</title>
+  <meta name="description" content="Đăng nhập vào Army News VNAR – Báo điện tử quân đội nhân dân Việt Nam">
+  <link rel="stylesheet" href="/css/style.css">
+  <link rel="stylesheet" href="/css/layout.css">
+</head>
+<body>
+
+<div class="auth-page">
+  <!-- ── Panel Branding (trái) ── -->
+  <div class="auth-brand">
+    <div class="auth-brand-logo">⚑</div>
+    <div class="auth-brand-name">ARMY NEWS VNAR</div>
+    <p class="auth-brand-tagline">Báo Điện Tử Quân Đội Nhân Dân Việt Nam – Thông tin chính thống, kịp thời, chính xác</p>
+
+    <div class="auth-brand-features">
+      <div class="auth-brand-feature">
+        <div class="auth-brand-feature-icon">📰</div>
+        <span>Tin tức quân sự cập nhật 24/7</span>
+      </div>
+      <div class="auth-brand-feature">
+        <div class="auth-brand-feature-icon">🔒</div>
+        <span>Nội dung dành riêng cho thành viên</span>
+      </div>
+      <div class="auth-brand-feature">
+        <div class="auth-brand-feature-icon">🌐</div>
+        <span>Thông tin chính trị, kinh tế, quốc tế</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Form đăng nhập (phải) ── -->
+  <div class="auth-form-side">
+    <div class="auth-form-header">
+      <h1 class="auth-form-title">Đăng nhập</h1>
+      <p class="auth-form-subtitle">Chào mừng bạn trở lại. Vui lòng đăng nhập để tiếp tục.</p>
+    </div>
+
+    <!-- Alert thông báo lỗi/thành công -->
+    <div id="alert-box" class="alert alert-error" style="display:none;">
+      <span class="alert-icon">⚠️</span>
+      <span id="alert-text"></span>
+    </div>
+
+    <form id="login-form" novalidate>
+      <div class="form-group">
+        <label class="form-label" for="email">Địa chỉ Email</label>
+        <input
+          class="form-control"
+          type="email"
+          id="email"
+          name="email"
+          placeholder="example@email.com"
+          autocomplete="email"
+          required
+        >
+        <span class="form-error" id="email-error"></span>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="password">Mật khẩu</label>
+        <input
+          class="form-control"
+          type="password"
+          id="password"
+          name="password"
+          placeholder="Nhập mật khẩu của bạn"
+          autocomplete="current-password"
+          required
+        >
+        <span class="form-error" id="password-error"></span>
+      </div>
+
+      <!-- Google reCAPTCHA -->
+      <div class="form-group">
+        <label class="form-label">Xác nhận bạn không phải robot</label>
+        <div id="recaptcha-container" style="margin-top: var(--space-1);"></div>
+        <span class="form-error" id="captcha-error"></span>
+      </div>
+
+      <button type="submit" class="btn btn-primary btn-full btn-lg" id="submit-btn">
+        Đăng nhập
+      </button>
+    </form>
+
+    <div class="auth-form-footer">
+      Chưa có tài khoản?
+      <a href="/register" style="color: var(--color-primary); font-weight: 600;">Đăng ký ngay</a>
+    </div>
+  </div>
+</div>
+
+<!-- Toast container -->
+<div class="toast-container" id="toast-container"></div>
+
+<script src="/js/auth.js"></script>
+<script>
+  // Khởi tạo trang login
+  initRecaptcha();
+
+  document.getElementById('login-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    await handleLogin();
+  });
+</script>
+</body>
+</html>

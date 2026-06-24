@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Đọc bài báo – Army News VNAR</title>
+  <meta name="description" content="Đọc tin tức quân sự, chính trị, kinh tế tại Army News VNAR">
+  <link rel="stylesheet" href="/css/style.css">
+  <link rel="stylesheet" href="/css/layout.css">
+</head>
+<body>
+
+<div class="site-wrapper">
+
+  <!-- ══ HEADER ══ -->
+  <header class="site-header">
+    <div class="container">
+      <div class="header-top">
+        <a href="/" class="site-logo">
+          <div class="site-logo-icon">⚑</div>
+          <div class="site-logo-text">
+            <div class="site-logo-name">ARMY NEWS VNAR</div>
+            <div class="site-logo-tagline">Báo Điện Tử Quân Đội Nhân Dân Việt Nam</div>
+          </div>
+        </a>
+        <div class="header-user">
+          <span class="header-user-name" id="user-name">...</span>
+          <span class="header-user-role" id="user-role-badge"></span>
+          <span id="cms-btn-slot"></span>
+          <button class="btn btn-ghost btn-sm" onclick="handleLogout()">Đăng xuất</button>
+          <button class="hamburger" id="hamburger" onclick="toggleMenu()">
+            <span></span><span></span><span></span>
+          </button>
+        </div>
+      </div>
+      <nav class="header-nav" id="header-nav">
+        <a class="nav-link" href="/">← Trang chủ</a>
+        <span id="nav-categories"></span>
+      </nav>
+    </div>
+  </header>
+
+  <!-- ══ ARTICLE MAIN ══ -->
+  <main class="site-main">
+    <div class="container">
+
+      <!-- Loading -->
+      <div id="loading-indicator" class="text-center" style="padding: var(--space-16);">
+        <div class="spinner" style="margin: 0 auto;"></div>
+        <p style="margin-top: var(--space-4); color: var(--color-gray-400);">Đang tải bài báo...</p>
+      </div>
+
+      <!-- Article content -->
+      <div id="article-content" style="display:none;" class="article-page-grid">
+
+        <!-- Main article column -->
+        <article>
+          <div class="article-content-wrapper">
+            <!-- Breadcrumb -->
+            <div style="margin-bottom: var(--space-4); font-size: var(--text-sm); color: var(--color-gray-400);">
+              <a href="/" style="color: var(--color-gray-400);">Trang chủ</a>
+              <span> / </span>
+              <a id="article-cat-link" href="#" style="color: var(--color-primary);" id="breadcrumb-cat"></a>
+              <span id="breadcrumb-cat-sep" style="display:none;"> / </span>
+            </div>
+
+            <!-- Category badge -->
+            <a class="article-category-tag" id="article-category" href="#"></a>
+
+            <!-- Title -->
+            <h1 class="article-page-title" id="article-title">Đang tải...</h1>
+
+            <!-- Meta -->
+            <div class="article-page-meta">
+              <div class="article-author">
+                <div class="article-author-avatar" id="author-avatar">?</div>
+                <div class="article-author-info">
+                  <div class="article-author-name" id="article-author">Tác giả</div>
+                  <div class="article-author-date" id="article-date">Ngày đăng</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Hero image -->
+            <img id="article-hero-img" class="article-hero-img" src="" alt="" style="display:none;">
+
+            <!-- Article body -->
+            <div class="article-body" id="article-body"></div>
+
+            <!-- Actions (Sửa/Xóa nếu là tác giả hoặc admin) -->
+            <div class="article-actions" id="article-actions" style="display:none;">
+              <button class="btn btn-outline btn-sm" id="edit-btn" onclick="goToEdit()">✏️ Sửa bài</button>
+              <button class="btn btn-danger btn-sm" id="delete-btn" onclick="confirmDelete()">🗑️ Xóa bài</button>
+            </div>
+          </div>
+        </article>
+
+        <!-- Sidebar -->
+        <aside class="sidebar">
+          <div class="sidebar-widget">
+            <div class="sidebar-widget-header">
+              <h3 class="sidebar-widget-title">📰 Bài liên quan</h3>
+            </div>
+            <div class="sidebar-widget-body">
+              <div class="articles-list" id="related-articles">
+                <p style="color: var(--color-gray-400); font-size: var(--text-sm); padding: var(--space-4) 0;">
+                  Không có bài liên quan.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div class="sidebar-widget">
+            <div class="sidebar-widget-header">
+              <h3 class="sidebar-widget-title">📂 Danh mục</h3>
+            </div>
+            <div class="sidebar-widget-body">
+              <div id="sidebar-categories"></div>
+            </div>
+          </div>
+        </aside>
+      </div>
+
+      <!-- Error state -->
+      <div id="error-state" style="display:none;" class="empty-state">
+        <div class="empty-state-icon">😕</div>
+        <h3 class="empty-state-title">Không tìm thấy bài báo</h3>
+        <p class="empty-state-desc">Bài báo này không tồn tại hoặc chưa được đăng tải.</p>
+        <a href="/" class="btn btn-primary" style="margin-top: var(--space-5);">Về trang chủ</a>
+      </div>
+
+    </div>
+  </main>
+
+  <!-- ══ FOOTER ══ -->
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-bottom">
+        <span>© 2024 Army News VNAR. Bảo lưu mọi quyền.</span>
+        <a href="/" style="color: rgba(255,255,255,0.4);">← Về trang chủ</a>
+      </div>
+    </div>
+  </footer>
+
+</div>
+
+<!-- Confirm delete modal -->
+<div class="modal-overlay" id="delete-modal" style="display:none;">
+  <div class="modal">
+    <h3 class="modal-title">⚠️ Xác nhận xóa bài</h3>
+    <p style="color: var(--color-gray-600); font-size: var(--text-sm);">
+      Bạn có chắc muốn xóa bài báo này không? Hành động này không thể hoàn tác.
+    </p>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeDeleteModal()">Hủy</button>
+      <button class="btn btn-danger" id="confirm-delete-btn" onclick="executeDelete()">Xóa bài</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast-container" id="toast-container"></div>
+
+<script src="/js/frontend.js"></script>
+<script>
+  // Lấy article ID từ URL: /article/:id
+  const articleId = window.location.pathname.split('/').pop();
+  initArticlePage(articleId);
+</script>
+</body>
+</html>

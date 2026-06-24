@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Quản trị hệ thống – Army News VNAR</title>
+  <meta name="description" content="Admin dashboard quản lý người dùng và hệ thống">
+  <link rel="stylesheet" href="/css/style.css">
+  <link rel="stylesheet" href="/css/layout.css">
+</head>
+<body>
+
+<div class="site-wrapper">
+
+  <!-- ══ HEADER ══ -->
+  <header class="site-header">
+    <div class="container">
+      <div class="header-top">
+        <a href="/" class="site-logo">
+          <div class="site-logo-icon">⚑</div>
+          <div class="site-logo-text">
+            <div class="site-logo-name">ARMY NEWS VNAR</div>
+            <div class="site-logo-tagline">Admin Dashboard</div>
+          </div>
+        </a>
+        <div class="header-user">
+          <span class="header-user-name" id="user-name">...</span>
+          <span class="header-user-role admin" id="user-role-badge">Admin</span>
+          <a href="/cms" class="btn btn-ghost btn-sm">📝 CMS</a>
+          <a href="/" class="btn btn-ghost btn-sm">← Trang chủ</a>
+          <button class="btn btn-ghost btn-sm" onclick="handleLogout()">Đăng xuất</button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- ══ ADMIN MAIN ══ -->
+  <main class="site-main">
+    <div class="container">
+      <div style="margin-bottom: var(--space-8);">
+        <h1 style="font-family: var(--font-serif); font-size: var(--text-3xl); color: var(--color-dark); margin-bottom: var(--space-2);">
+          ⚙️ Admin Dashboard
+        </h1>
+        <p style="color: var(--color-gray-600);">Quản lý người dùng và theo dõi thống kê hệ thống.</p>
+      </div>
+
+      <!-- ── Stats Cards ── -->
+      <div class="stats-grid" id="stats-grid">
+        <div class="stat-card">
+          <div class="stat-icon">👥</div>
+          <div>
+            <div class="stat-value" id="stat-users">–</div>
+            <div class="stat-label">Tổng người dùng</div>
+          </div>
+        </div>
+        <div class="stat-card green">
+          <div class="stat-icon">✅</div>
+          <div>
+            <div class="stat-value" id="stat-verified">–</div>
+            <div class="stat-label">Đã xác thực email</div>
+          </div>
+        </div>
+        <div class="stat-card blue">
+          <div class="stat-icon">📰</div>
+          <div>
+            <div class="stat-value" id="stat-articles">–</div>
+            <div class="stat-label">Tổng bài báo</div>
+          </div>
+        </div>
+        <div class="stat-card orange">
+          <div class="stat-icon">🚀</div>
+          <div>
+            <div class="stat-value" id="stat-published">–</div>
+            <div class="stat-label">Bài đã đăng</div>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon">✍️</div>
+          <div>
+            <div class="stat-value" id="stat-editors">–</div>
+            <div class="stat-label">Editor / Admin</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── User Management ── -->
+      <div class="cms-panel">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom: var(--space-6); padding-bottom: var(--space-4); border-bottom: 2px solid var(--color-primary);">
+          <h2 style="font-family: var(--font-serif); font-size: var(--text-2xl); color: var(--color-dark); margin:0;">
+            👥 Quản lý người dùng
+          </h2>
+          <button class="btn btn-ghost btn-sm" onclick="loadUsers()">🔄 Làm mới</button>
+        </div>
+
+        <!-- Alert -->
+        <div id="admin-alert" class="alert" style="display:none;">
+          <span class="alert-icon" id="admin-alert-icon">✅</span>
+          <span id="admin-alert-text"></span>
+        </div>
+
+        <!-- Loading -->
+        <div id="users-loading" class="text-center" style="padding: var(--space-8);">
+          <div class="spinner" style="margin: 0 auto;"></div>
+        </div>
+
+        <!-- Users table -->
+        <div class="table-container" id="users-table-container" style="display:none;">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Họ tên</th>
+                <th>Email</th>
+                <th>IP đăng ký</th>
+                <th>Trạng thái</th>
+                <th>Quyền hiện tại</th>
+                <th>Ngày tạo</th>
+                <th>Thao tác</th>
+              </tr>
+            </thead>
+            <tbody id="users-table-body"></tbody>
+          </table>
+        </div>
+
+        <div id="users-empty" style="display:none;" class="empty-state">
+          <div class="empty-state-icon">👤</div>
+          <h3 class="empty-state-title">Chưa có người dùng nào</h3>
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+  <footer class="site-footer" style="padding: var(--space-4) 0;">
+    <div class="container">
+      <div class="footer-bottom">
+        <span>© 2024 Army News VNAR – Admin Dashboard</span>
+      </div>
+    </div>
+  </footer>
+
+</div>
+
+<!-- Confirm delete user modal -->
+<div class="modal-overlay" id="delete-user-modal" style="display:none;">
+  <div class="modal">
+    <h3 class="modal-title">⚠️ Xác nhận xóa tài khoản</h3>
+    <p style="color: var(--color-gray-600); font-size: var(--text-sm);">
+      Bạn có chắc muốn xóa tài khoản này không? Tất cả bài báo của họ sẽ bị giữ lại nhưng tài khoản sẽ bị xóa vĩnh viễn.
+    </p>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="document.getElementById('delete-user-modal').style.display='none'">Hủy</button>
+      <button class="btn btn-danger" id="confirm-delete-user-btn">Xóa tài khoản</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast-container" id="toast-container"></div>
+
+<script src="/js/frontend.js"></script>
+<script src="/js/admin.js"></script>
+<script>
+  initAdminPage();
+</script>
+</body>
+</html>

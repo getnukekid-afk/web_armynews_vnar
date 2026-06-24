@@ -7,16 +7,36 @@
 require('dotenv').config();
 const nodemailer = require('nodemailer');
 
-// Tạo transporter kết nối đến SMTP server
+// ─── Khởi tạo transporter ────────────────────
 const transporter = nodemailer.createTransport({
   host:   process.env.SMTP_HOST || 'smtp.gmail.com',
   port:   parseInt(process.env.SMTP_PORT) || 587,
-  secure: false, // true cho port 465, false cho 587 (STARTTLS)
+  secure: false, // STARTTLS cho port 587
   auth: {
     user: process.env.SMTP_USER,
     pass: process.env.SMTP_PASS,
   },
 });
+
+// ─── Kiểm tra kết nối SMTP khi khởi động ────
+transporter.verify((err) => {
+  if (err) {
+    console.error('[Email] ❌ Không thể kết nối SMTP:', err.message);
+    console.error('[Email]    Kiểm tra lại SMTP_USER, SMTP_PASS trong biến môi trường.');
+  } else {
+    console.log(`[Email] ✅ SMTP sẵn sàng – ${process.env.SMTP_USER || '(chưa cấu hình)'}`);
+  }
+});
+
+// ─── Helper: từ địa chỉ gửi ─────────────────
+function getSender() {
+  // Nếu SMTP_FROM chưa set hoặc vẫn là placeholder → tự build từ SMTP_USER
+  const from = process.env.SMTP_FROM;
+  if (!from || from.includes('your_email@') || !process.env.SMTP_USER) {
+    return `"Army News VNAR" <${process.env.SMTP_USER || 'no-reply@armynews.vn'}>`;
+  }
+  return from;
+}
 
 /**
  * Gửi email xác thực tài khoản.
@@ -30,7 +50,7 @@ async function sendVerificationEmail(toEmail, toName, token, baseUrl) {
   const verifyUrl = `${base}/api/auth/verify/${token}`;
 
   const mailOptions = {
-    from:    process.env.SMTP_FROM || '"Army News VNAR" <no-reply@armynews.vn>',
+    from:    getSender(),
     to:      toEmail,
     subject: '✅ Xác thực tài khoản – Army News VNAR',
     html: `
@@ -84,10 +104,10 @@ async function sendVerificationEmail(toEmail, toName, token, baseUrl) {
 
   try {
     const info = await transporter.sendMail(mailOptions);
-    console.log(`[Email] Đã gửi email xác thực đến ${toEmail}:`, info.messageId);
+    console.log(`[Email] ✅ Đã gửi email xác thực đến ${toEmail}:`, info.messageId);
     return { success: true };
   } catch (err) {
-    console.error('[Email] Lỗi gửi email:', err.message);
+    console.error(`[Email] ❌ Lỗi gửi email xác thực đến ${toEmail}:`, err.message);
     return { success: false, error: err.message };
   }
 }
@@ -104,7 +124,7 @@ async function sendPasswordResetEmail(toEmail, toName, token, baseUrl) {
   const resetUrl = `${base}/reset-password?token=${token}`;
 
   const mailOptions = {
-    from:    process.env.SMTP_FROM || '"Army News VNAR" <no-reply@armynews.vn>',
+    from:    getSender(),
     to:      toEmail,
     subject: '🔑 Đặt lại mật khẩu – Army News VNAR',
     html: `
@@ -119,7 +139,7 @@ async function sendPasswordResetEmail(toEmail, toName, token, baseUrl) {
                        box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
           .header { background: #c0392b; padding: 32px; text-align: center; }
           .header h1 { color: #fff; margin: 0; font-size: 24px; letter-spacing: 1px; }
-          .header p  { color: rgba(255,255,255,0.85); margin: 4px 0 0; }
+          .header p  { color: rgba(255,255,255,0.85); margin: 4px 0 0; }\
           .body { padding: 32px; color: #333; line-height: 1.6; }
           .body h2 { margin-top: 0; color: #1a1a2e; }
           .btn { display: inline-block; margin: 24px 0; padding: 14px 32px;
@@ -162,10 +182,10 @@ async function sendPasswordResetEmail(toEmail, toName, token, baseUrl) {
 
   try {
     const info = await transporter.sendMail(mailOptions);
-    console.log(`[Email] Đã gửi email đặt lại mật khẩu đến ${toEmail}:`, info.messageId);
+    console.log(`[Email] ✅ Đã gửi email đặt lại mật khẩu đến ${toEmail}:`, info.messageId);
     return { success: true };
   } catch (err) {
-    console.error('[Email] Lỗi gửi email reset:', err.message);
+    console.error(`[Email] ❌ Lỗi gửi email reset đến ${toEmail}:`, err.message);
     return { success: false, error: err.message };
   }
 }

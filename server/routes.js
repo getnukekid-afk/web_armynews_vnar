@@ -21,6 +21,41 @@ router.get('/api/config', (req, res) => {
 });
 
 // ═══════════════════════════════════════════
+// SMTP TEST ROUTE – Chỉ admin, dùng để debug email
+// GET /api/admin/test-smtp?to=email@example.com
+// ═══════════════════════════════════════════
+router.get('/api/admin/test-smtp', auth.requireRole('admin'), async (req, res) => {
+  const { sendVerificationEmail } = require('./emailService');
+  const toEmail = req.query.to || req.session?.userEmail;
+
+  if (!toEmail) {
+    return res.status(400).json({ error: 'Thêm ?to=email@example.com vào URL' });
+  }
+
+  // Kiểm tra env vars
+  const config = {
+    SMTP_HOST: process.env.SMTP_HOST || '(chưa set)',
+    SMTP_PORT: process.env.SMTP_PORT || '(chưa set)',
+    SMTP_USER: process.env.SMTP_USER || '(chưa set)',
+    SMTP_PASS: process.env.SMTP_PASS ? '***' + process.env.SMTP_PASS.slice(-4) : '(chưa set)',
+    SMTP_FROM: process.env.SMTP_FROM || '(chưa set)',
+    BASE_URL:  process.env.BASE_URL  || '(chưa set)',
+  };
+
+  const proto   = req.headers['x-forwarded-proto'] || req.protocol;
+  const host    = req.headers['x-forwarded-host']  || req.headers.host;
+  const baseUrl = `${proto}://${host}`;
+
+  const result = await sendVerificationEmail(toEmail, 'Test User', 'test-token-debug', baseUrl);
+
+  return res.json({
+    smtpConfig: config,
+    detectedBaseUrl: baseUrl,
+    emailResult: result,
+  });
+});
+
+// ═══════════════════════════════════════════
 // AUTH ROUTES
 // ═══════════════════════════════════════════
 router.post('/api/auth/register', auth.register);

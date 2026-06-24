@@ -2,31 +2,33 @@
 // emailService.js – Dịch vụ gửi email
 // =============================================
 // Hỗ trợ 2 transport:
-//   1. RESEND HTTP API (dùng cho Render.com / cloud) ← ưu tiên
+//   1. BREVO HTTP API (dùng cho Render.com / cloud)  ← ưu tiên
 //   2. SMTP / Nodemailer (dùng cho local dev)
 //
 // Render.com free tier chặn SMTP (port 25/465/587).
-// Resend.com miễn phí 100 email/ngày, dùng built-in fetch().
+// Brevo (Sendinblue) miễn phí 300 email/ngày, dùng built-in fetch().
+// Không cần verify domain, chỉ cần verify sender email.
 
 require('dotenv').config();
 
 // ─── Detect transport mode ───────────────────
-const RESEND_API_KEY = process.env.RESEND_API_KEY;
-const USE_RESEND     = !!RESEND_API_KEY;
+const BREVO_API_KEY = process.env.BREVO_API_KEY;
+const USE_BREVO     = !!BREVO_API_KEY;
 
 let nodemailerTransporter = null;
 
-if (USE_RESEND) {
-  console.log('[Email] ✅ Transport: Resend HTTP API');
+if (USE_BREVO) {
+  console.log('[Email] ✅ Transport: Brevo HTTP API (300 emails/ngày)');
+  console.log(`[Email]    Sender: ${process.env.SMTP_FROM || process.env.SMTP_USER || '(chưa set)'}`);
 } else {
-  // Fallback: SMTP / Nodemailer (chỉ dùng cho local dev)
+  // Fallback: SMTP / Nodemailer (chỉ hoạt động trên local dev)
   const nodemailer = require('nodemailer');
   const smtpUser   = process.env.SMTP_USER;
   const smtpPass   = process.env.SMTP_PASS;
   const smtpHost   = process.env.SMTP_HOST || 'smtp.gmail.com';
   const smtpPort   = parseInt(process.env.SMTP_PORT) || 587;
 
-  console.log('[Email] ⚠️  Transport: SMTP (Nodemailer)');
+  console.log('[Email] ⚠️  Transport: SMTP (Nodemailer) – không hoạt động trên Render.com');
   console.log(`[Email]    HOST: ${smtpHost}:${smtpPort}`);
   console.log(`[Email]    USER: ${smtpUser || '❌ CHƯA SET'}`);
 
@@ -45,59 +47,66 @@ if (USE_RESEND) {
       .then(() => console.log('[Email] ✅ SMTP kết nối thành công!'))
       .catch(err => {
         console.error('[Email] ❌ SMTP verify thất bại:', err.message);
-        console.error('[Email]    Nếu trên cloud → set RESEND_API_KEY để dùng Resend HTTP API.');
+        console.error('[Email]    Set BREVO_API_KEY để dùng Brevo HTTP API.');
       });
   } else {
     console.error('[Email] ❌ Thiếu SMTP_USER hoặc SMTP_PASS!');
   }
 }
 
-// ─── Helper: địa chỉ gửi ────────────────────
-function getSender() {
-  // Resend: phải dùng domain đã verify, hoặc onboarding@resend.dev
-  if (USE_RESEND) {
-    // Resend: CHỈ dùng RESEND_FROM nếu đã verify domain riêng
-    // KHÔNG fallback sang SMTP_FROM (gmail.com không verify được trên Resend)
-    const resendFrom = process.env.RESEND_FROM;
-    if (resendFrom && !resendFrom.includes('gmail.com') && !resendFrom.includes('your_email@')) {
-      return resendFrom;
-    }
-    return 'Army News VNAR <onboarding@resend.dev>';
-  }
-  // SMTP: dùng SMTP_FROM hoặc SMTP_USER
-  const from = process.env.SMTP_FROM;
-  if (from && !from.includes('your_email@')) return from;
-  return `"Army News VNAR" <${process.env.SMTP_USER || 'no-reply@armynews.vn'}>`;
+// ─── Helper: thông tin sender ────────────────
+function getSenderEmail() {
+  return process.env.SMTP_USER || 'no-reply@armynews.vn';
 }
 
-// ─── Core: gửi email qua Resend HTTP API ─────
-async function sendViaResend(to, subject, html) {
+function getSenderName() {
+  // Parse tên từ SMTP_FROM nếu có (dạng "Name <email>")
+  const from = process.env.SMTP_FROM;
+  if (from) {
+    const match = from.match(/^"?([^"<]+)"?\s*</);
+    if (match) return match[1].trim();
+  }
+  return 'Army News VNAR';
+}
+
+function getSmtpFrom() {
+  const from = process.env.SMTP_FROM;
+  if (from && !from.includes('your_email@')) return from;
+  return `"Army News VNAR" <${getSenderEmail()}>`;
+}
+
+// ─── Core: gửi email qua Brevo HTTP API ──────
+async function sendViaBrevo(to, subject, html) {
+  const senderEmail = getSenderEmail();
+  const senderName  = getSenderName();
+
   try {
-    const res = await fetch('https://api.resend.com/emails', {
+    const res = await fetch('https://api.brevo.com/v3/smtp/email', {
       method:  'POST',
       headers: {
-        'Authorization': `Bearer ${RESEND_API_KEY}`,
-        'Content-Type':  'application/json',
+        'api-key':      BREVO_API_KEY,
+        'Content-Type': 'application/json',
+        'Accept':       'application/json',
       },
       body: JSON.stringify({
-        from:    getSender(),
-        to:      Array.isArray(to) ? to : [to],
-        subject: subject,
-        html:    html,
+        sender:      { name: senderName, email: senderEmail },
+        to:          [{ email: to }],
+        subject:     subject,
+        htmlContent: html,
       }),
     });
 
     const data = await res.json();
 
     if (!res.ok) {
-      console.error(`[Email] ❌ Resend API lỗi (${res.status}):`, JSON.stringify(data));
+      console.error(`[Email] ❌ Brevo API lỗi (${res.status}):`, JSON.stringify(data));
       return { success: false, error: data.message || JSON.stringify(data) };
     }
 
-    console.log(`[Email] ✅ Gửi thành công qua Resend đến ${to} – ID: ${data.id}`);
-    return { success: true, messageId: data.id };
+    console.log(`[Email] ✅ Gửi thành công qua Brevo đến ${to} – MessageID: ${data.messageId}`);
+    return { success: true, messageId: data.messageId };
   } catch (err) {
-    console.error(`[Email] ❌ Resend fetch lỗi:`, err.message);
+    console.error(`[Email] ❌ Brevo fetch lỗi:`, err.message);
     return { success: false, error: err.message };
   }
 }
@@ -105,14 +114,14 @@ async function sendViaResend(to, subject, html) {
 // ─── Core: gửi email qua SMTP ────────────────
 async function sendViaSmtp(to, subject, html) {
   if (!nodemailerTransporter) {
-    const msg = 'SMTP transporter chưa sẵn sàng. Set RESEND_API_KEY để dùng Resend.';
+    const msg = 'SMTP transporter chưa sẵn sàng. Set BREVO_API_KEY để dùng Brevo.';
     console.error(`[Email] ❌ ${msg}`);
     return { success: false, error: msg };
   }
 
   try {
     const info = await nodemailerTransporter.sendMail({
-      from:    getSender(),
+      from:    getSmtpFrom(),
       to:      to,
       subject: subject,
       html:    html,
@@ -125,42 +134,42 @@ async function sendViaSmtp(to, subject, html) {
   }
 }
 
-// ─── Unified send (auto-chọn transport) ──────
+// ─── Unified send ────────────────────────────
 async function sendMail(mailOptions) {
   const { to, subject, html, text } = mailOptions;
-  if (USE_RESEND) {
-    return sendViaResend(to, subject, html || text);
+  if (USE_BREVO) {
+    return sendViaBrevo(to, subject, html || text);
   }
   return sendViaSmtp(to, subject, html || text);
 }
 
-// ─── Chẩn đoán (dùng cho test endpoint) ──────
+// ─── Chẩn đoán ──────────────────────────────
 async function diagnoseSmtp() {
   const diag = {
-    transport: USE_RESEND ? 'Resend HTTP API' : 'SMTP (Nodemailer)',
-    resendConfigured: !!RESEND_API_KEY,
+    transport: USE_BREVO ? 'Brevo HTTP API' : 'SMTP (Nodemailer)',
+    brevoConfigured: !!BREVO_API_KEY,
     smtpConfigured: !!(process.env.SMTP_USER && process.env.SMTP_PASS),
+    senderEmail: getSenderEmail(),
+    senderName: getSenderName(),
     envVars: {
-      RESEND_API_KEY: RESEND_API_KEY ? `✅ (${RESEND_API_KEY.slice(0, 8)}...)` : '❌ CHƯA SET',
+      BREVO_API_KEY: BREVO_API_KEY ? `✅ (${BREVO_API_KEY.slice(0, 12)}...)` : '❌ CHƯA SET',
       SMTP_HOST: process.env.SMTP_HOST || '(chưa set)',
       SMTP_PORT: process.env.SMTP_PORT || '(chưa set)',
       SMTP_USER: process.env.SMTP_USER || '❌ CHƯA SET',
-      SMTP_PASS_LENGTH: process.env.SMTP_PASS ? process.env.SMTP_PASS.length : 0,
       SMTP_FROM: process.env.SMTP_FROM || '(auto)',
-      RESEND_FROM: process.env.RESEND_FROM || '(mặc định: onboarding@resend.dev)',
     },
     verifyResult: null,
   };
 
-  if (USE_RESEND) {
-    // Test Resend bằng cách gọi API domains endpoint
+  if (USE_BREVO) {
+    // Test Brevo bằng cách gọi API account endpoint
     try {
-      const res = await fetch('https://api.resend.com/domains', {
-        headers: { 'Authorization': `Bearer ${RESEND_API_KEY}` },
+      const res = await fetch('https://api.brevo.com/v3/account', {
+        headers: { 'api-key': BREVO_API_KEY, 'Accept': 'application/json' },
       });
       const data = await res.json();
       diag.verifyResult = res.ok
-        ? { success: true, message: 'Resend API key hợp lệ', domains: data.data?.map(d => d.name) || [] }
+        ? { success: true, message: 'Brevo API key hợp lệ', email: data.email, plan: data.plan?.[0]?.type }
         : { success: false, error: data.message || 'API key không hợp lệ' };
     } catch (err) {
       diag.verifyResult = { success: false, error: err.message };
@@ -186,7 +195,7 @@ async function sendVerificationEmail(toEmail, toName, token, baseUrl) {
 
   return sendMail({
     to:      toEmail,
-    subject: '✅ Xác thực tài khoản – Army News VNAR',
+    subject: 'Xác thực tài khoản – Army News VNAR',
     html: `
       <!DOCTYPE html>
       <html lang="vi">
@@ -213,7 +222,7 @@ async function sendVerificationEmail(toEmail, toName, token, baseUrl) {
       <body>
         <div class="container">
           <div class="header">
-            <h1>⚑ ARMY NEWS VNAR</h1>
+            <h1>ARMY NEWS VNAR</h1>
             <p>Báo Điện Tử Quân Đội Nhân Dân Việt Nam</p>
           </div>
           <div class="body">
@@ -228,7 +237,7 @@ async function sendVerificationEmail(toEmail, toName, token, baseUrl) {
             </p>
           </div>
           <div class="footer">
-            © ${new Date().getFullYear()} Army News VNAR. Mọi quyền được bảo lưu.
+            &copy; ${new Date().getFullYear()} Army News VNAR. Mọi quyền được bảo lưu.
           </div>
         </div>
       </body>
@@ -244,7 +253,7 @@ async function sendPasswordResetEmail(toEmail, toName, token, baseUrl) {
 
   return sendMail({
     to:      toEmail,
-    subject: '🔑 Đặt lại mật khẩu – Army News VNAR',
+    subject: 'Đặt lại mật khẩu – Army News VNAR',
     html: `
       <!DOCTYPE html>
       <html lang="vi">
@@ -273,16 +282,16 @@ async function sendPasswordResetEmail(toEmail, toName, token, baseUrl) {
       <body>
         <div class="container">
           <div class="header">
-            <h1>⚑ ARMY NEWS VNAR</h1>
+            <h1>ARMY NEWS VNAR</h1>
             <p>Báo Điện Tử Quân Đội Nhân Dân Việt Nam</p>
           </div>
           <div class="body">
             <h2>Xin chào, ${toName}!</h2>
             <p>Chúng tôi nhận được yêu cầu <strong>đặt lại mật khẩu</strong> cho tài khoản của bạn.</p>
             <p>Nhấn nút bên dưới để tạo mật khẩu mới:</p>
-            <a href="${resetUrl}" class="btn">🔑 Đặt lại mật khẩu</a>
+            <a href="${resetUrl}" class="btn">Đặt lại mật khẩu</a>
             <div class="warning">
-              ⏰ Link này chỉ có hiệu lực trong <strong>1 giờ</strong>. Sau đó bạn cần yêu cầu lại.
+              Link này chỉ có hiệu lực trong <strong>1 giờ</strong>. Sau đó bạn cần yêu cầu lại.
             </div>
             <p class="note">
               Nếu bạn không yêu cầu đặt lại mật khẩu, hãy bỏ qua email này.<br><br>
@@ -290,7 +299,7 @@ async function sendPasswordResetEmail(toEmail, toName, token, baseUrl) {
             </p>
           </div>
           <div class="footer">
-            © ${new Date().getFullYear()} Army News VNAR. Mọi quyền được bảo lưu.
+            &copy; ${new Date().getFullYear()} Army News VNAR. Mọi quyền được bảo lưu.
           </div>
         </div>
       </body>

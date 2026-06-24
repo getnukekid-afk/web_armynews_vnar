@@ -21,38 +21,35 @@ router.get('/api/config', (req, res) => {
 });
 
 // ═══════════════════════════════════════════
-// SMTP DIAGNOSTICS – Chỉ admin, dùng để debug email
+// EMAIL DIAGNOSTICS – Chỉ admin, dùng để debug
 // GET /api/admin/test-smtp?to=email@example.com
 // ═══════════════════════════════════════════
 router.get('/api/admin/test-smtp', auth.requireRole('admin'), async (req, res) => {
   const { diagnoseSmtp, sendMail } = require('./emailService');
   const toEmail = req.query.to;
 
-  // Bước 1: Chẩn đoán SMTP connection
+  // Bước 1: Chẩn đoán transport
   const diagnosis = await diagnoseSmtp();
 
-  // Bước 2: Nếu có ?to= thì gửi email test đơn giản
+  // Bước 2: Nếu có ?to= và transport sẵn sàng → gửi test email
   let sendResult = null;
   if (toEmail && diagnosis.verifyResult?.success) {
-    const proto   = req.headers['x-forwarded-proto'] || req.protocol;
-    const host    = req.headers['x-forwarded-host']  || req.headers.host;
-
+    const now = new Date().toISOString();
     sendResult = await sendMail({
-      from:    `"Army News Test" <${process.env.SMTP_USER}>`,
       to:      toEmail,
-      subject: '🧪 Test SMTP – Army News VNAR',
-      text:    `Email test gửi lúc ${new Date().toISOString()}\nServer: ${proto}://${host}\nSMTP User: ${process.env.SMTP_USER}`,
+      subject: 'Test Email – Army News VNAR',
+      html:    `<h2>Test Email</h2><p>Gửi lúc: ${now}</p><p>Transport: ${diagnosis.transport}</p>`,
     });
   }
 
   return res.json({
     diagnosis,
-    sendResult: sendResult || (toEmail ? 'Không gửi vì SMTP verify thất bại' : 'Thêm ?to=email để gửi test'),
+    sendResult: sendResult || (toEmail ? 'Không gửi vì transport chưa sẵn sàng' : 'Thêm ?to=email để gửi test'),
     tips: !diagnosis.verifyResult?.success ? [
-      'Kiểm tra SMTP_USER và SMTP_PASS đã được set trong Render Environment Variables',
-      'SMTP_PASS phải là Gmail App Password (16 ký tự KHÔNG có khoảng trắng, ví dụ: mtwi noal qvxc spcl → mtwinoalqvxcspcl)',
-      'Tài khoản Gmail phải bật 2FA trước khi tạo App Password',
-      'Tạo App Password tại: https://myaccount.google.com/apppasswords',
+      'Trên Render.com: set BREVO_API_KEY trong Environment Variables',
+      'Đăng ký Brevo miễn phí: https://app.brevo.com/account/register',
+      'Lấy API key: https://app.brevo.com/settings/keys/api',
+      'Verify sender email (SMTP_USER) trong Brevo → Settings → Senders',
     ] : [],
   });
 });

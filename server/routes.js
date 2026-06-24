@@ -21,37 +21,39 @@ router.get('/api/config', (req, res) => {
 });
 
 // ═══════════════════════════════════════════
-// SMTP TEST ROUTE – Chỉ admin, dùng để debug email
+// SMTP DIAGNOSTICS – Chỉ admin, dùng để debug email
 // GET /api/admin/test-smtp?to=email@example.com
 // ═══════════════════════════════════════════
 router.get('/api/admin/test-smtp', auth.requireRole('admin'), async (req, res) => {
-  const { sendVerificationEmail } = require('./emailService');
-  const toEmail = req.query.to || req.session?.userEmail;
+  const { diagnoseSmtp, sendMail } = require('./emailService');
+  const toEmail = req.query.to;
 
-  if (!toEmail) {
-    return res.status(400).json({ error: 'Thêm ?to=email@example.com vào URL' });
+  // Bước 1: Chẩn đoán SMTP connection
+  const diagnosis = await diagnoseSmtp();
+
+  // Bước 2: Nếu có ?to= thì gửi email test đơn giản
+  let sendResult = null;
+  if (toEmail && diagnosis.verifyResult?.success) {
+    const proto   = req.headers['x-forwarded-proto'] || req.protocol;
+    const host    = req.headers['x-forwarded-host']  || req.headers.host;
+
+    sendResult = await sendMail({
+      from:    `"Army News Test" <${process.env.SMTP_USER}>`,
+      to:      toEmail,
+      subject: '🧪 Test SMTP – Army News VNAR',
+      text:    `Email test gửi lúc ${new Date().toISOString()}\nServer: ${proto}://${host}\nSMTP User: ${process.env.SMTP_USER}`,
+    });
   }
 
-  // Kiểm tra env vars
-  const config = {
-    SMTP_HOST: process.env.SMTP_HOST || '(chưa set)',
-    SMTP_PORT: process.env.SMTP_PORT || '(chưa set)',
-    SMTP_USER: process.env.SMTP_USER || '(chưa set)',
-    SMTP_PASS: process.env.SMTP_PASS ? '***' + process.env.SMTP_PASS.slice(-4) : '(chưa set)',
-    SMTP_FROM: process.env.SMTP_FROM || '(chưa set)',
-    BASE_URL:  process.env.BASE_URL  || '(chưa set)',
-  };
-
-  const proto   = req.headers['x-forwarded-proto'] || req.protocol;
-  const host    = req.headers['x-forwarded-host']  || req.headers.host;
-  const baseUrl = `${proto}://${host}`;
-
-  const result = await sendVerificationEmail(toEmail, 'Test User', 'test-token-debug', baseUrl);
-
   return res.json({
-    smtpConfig: config,
-    detectedBaseUrl: baseUrl,
-    emailResult: result,
+    diagnosis,
+    sendResult: sendResult || (toEmail ? 'Không gửi vì SMTP verify thất bại' : 'Thêm ?to=email để gửi test'),
+    tips: !diagnosis.verifyResult?.success ? [
+      'Kiểm tra SMTP_USER và SMTP_PASS đã được set trong Render Environment Variables',
+      'SMTP_PASS phải là Gmail App Password (16 ký tự KHÔNG có khoảng trắng, ví dụ: mtwi noal qvxc spcl → mtwinoalqvxcspcl)',
+      'Tài khoản Gmail phải bật 2FA trước khi tạo App Password',
+      'Tạo App Password tại: https://myaccount.google.com/apppasswords',
+    ] : [],
   });
 });
 

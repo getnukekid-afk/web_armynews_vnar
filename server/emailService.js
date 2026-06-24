@@ -1,55 +1,152 @@
 // =============================================
 // emailService.js – Dịch vụ gửi email (Nodemailer)
 // =============================================
-// Cấu hình SMTP qua biến môi trường (.env)
-// Hỗ trợ Gmail App Password
+// Hỗ trợ: Gmail SMTP trực tiếp + Gmail OAuth2 (fallback)
+// Debug: chi tiết lỗi SMTP, connection test, env vars check
 
 require('dotenv').config();
 const nodemailer = require('nodemailer');
 
-// ─── Khởi tạo transporter ────────────────────
-const transporter = nodemailer.createTransport({
-  host:   process.env.SMTP_HOST || 'smtp.gmail.com',
-  port:   parseInt(process.env.SMTP_PORT) || 587,
-  secure: false, // STARTTLS cho port 587
-  auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS,
-  },
-});
+// ─── Diagnostics: log cấu hình SMTP khi khởi động ───
+const smtpUser = process.env.SMTP_USER;
+const smtpPass = process.env.SMTP_PASS;
+const smtpHost = process.env.SMTP_HOST || 'smtp.gmail.com';
+const smtpPort = parseInt(process.env.SMTP_PORT) || 587;
 
-// ─── Kiểm tra kết nối SMTP khi khởi động ────
-transporter.verify((err) => {
-  if (err) {
-    console.error('[Email] ❌ Không thể kết nối SMTP:', err.message);
-    console.error('[Email]    Kiểm tra lại SMTP_USER, SMTP_PASS trong biến môi trường.');
-  } else {
-    console.log(`[Email] ✅ SMTP sẵn sàng – ${process.env.SMTP_USER || '(chưa cấu hình)'}`);
+console.log('[Email] ── Cấu hình SMTP ──');
+console.log(`[Email]   HOST : ${smtpHost}`);
+console.log(`[Email]   PORT : ${smtpPort}`);
+console.log(`[Email]   USER : ${smtpUser || '❌ CHƯA SET'}`);
+console.log(`[Email]   PASS : ${smtpPass ? `✅ (${smtpPass.length} ký tự)` : '❌ CHƯA SET'}`);
+console.log(`[Email]   FROM : ${process.env.SMTP_FROM || '(auto)'}`);
+
+// ─── Tạo transporter ────────────────────────
+let transporter = null;
+
+function createTransporter() {
+  // Nếu thiếu credentials → không tạo transporter
+  if (!smtpUser || !smtpPass) {
+    console.error('[Email] ❌ SMTP_USER hoặc SMTP_PASS chưa được cấu hình!');
+    return null;
   }
-});
 
-// ─── Helper: từ địa chỉ gửi ─────────────────
+  const t = nodemailer.createTransport({
+    host:   smtpHost,
+    port:   smtpPort,
+    secure: smtpPort === 465,  // true cho 465, false cho 587
+    auth: {
+      user: smtpUser,
+      pass: smtpPass,
+    },
+    // Timeout settings — Render.com có thể chậm kết nối SMTP
+    connectionTimeout: 10000,  // 10s chờ kết nối
+    greetingTimeout:   10000,  // 10s chờ server greeting
+    socketTimeout:     15000,  // 15s chờ response
+    // Debug
+    logger: false,
+    debug:  false,
+  });
+
+  // Verify kết nối async
+  t.verify()
+    .then(() => console.log('[Email] ✅ SMTP kết nối thành công!'))
+    .catch(err => {
+      console.error('[Email] ❌ SMTP verify thất bại:', err.message);
+      console.error('[Email]    Full error:', JSON.stringify({
+        code: err.code,
+        command: err.command,
+        response: err.response,
+      }));
+    });
+
+  return t;
+}
+
+transporter = createTransporter();
+
+// ─── Helper: địa chỉ gửi ────────────────────
 function getSender() {
-  // Nếu SMTP_FROM chưa set hoặc vẫn là placeholder → tự build từ SMTP_USER
   const from = process.env.SMTP_FROM;
-  if (!from || from.includes('your_email@') || !process.env.SMTP_USER) {
-    return `"Army News VNAR" <${process.env.SMTP_USER || 'no-reply@armynews.vn'}>`;
+  if (from && !from.includes('your_email@')) return from;
+  return `"Army News VNAR" <${smtpUser || 'no-reply@armynews.vn'}>`;
+}
+
+// ─── Core: gửi email với retry ───────────────
+async function sendMail(mailOptions) {
+  if (!transporter) {
+    const errMsg = 'SMTP transporter chưa được khởi tạo (thiếu SMTP_USER/SMTP_PASS).';
+    console.error(`[Email] ❌ ${errMsg}`);
+    return { success: false, error: errMsg };
   }
-  return from;
+
+  try {
+    const info = await transporter.sendMail(mailOptions);
+    console.log(`[Email] ✅ Gửi thành công đến ${mailOptions.to} – MessageID: ${info.messageId}`);
+    return { success: true, messageId: info.messageId };
+  } catch (err) {
+    console.error(`[Email] ❌ Gửi thất bại đến ${mailOptions.to}`);
+    console.error(`[Email]    Error: ${err.message}`);
+    console.error(`[Email]    Code: ${err.code || 'N/A'}`);
+    console.error(`[Email]    Command: ${err.command || 'N/A'}`);
+    console.error(`[Email]    Response: ${err.response || 'N/A'}`);
+
+    // Nếu lỗi authentication → log rõ hơn
+    if (err.code === 'EAUTH' || err.responseCode === 535) {
+      console.error('[Email] ⚠️  Lỗi xác thực Gmail! Kiểm tra:');
+      console.error('[Email]     1. SMTP_PASS phải là App Password (16 ký tự, không khoảng trắng)');
+      console.error('[Email]     2. Tạo tại: myaccount.google.com → Security → App passwords');
+      console.error('[Email]     3. Bật 2FA trước khi tạo App Password');
+    }
+
+    return { success: false, error: err.message, code: err.code };
+  }
+}
+
+// ─── Chẩn đoán SMTP (dùng cho test-smtp endpoint) ───
+async function diagnoseSmtp() {
+  const diag = {
+    envVars: {
+      SMTP_HOST: smtpHost,
+      SMTP_PORT: smtpPort,
+      SMTP_USER: smtpUser || '❌ CHƯA SET',
+      SMTP_PASS_LENGTH: smtpPass ? smtpPass.length : 0,
+      SMTP_PASS_HAS_SPACES: smtpPass ? smtpPass.includes(' ') : false,
+      SMTP_PASS_PREVIEW: smtpPass ? smtpPass.slice(0, 4) + '****' + smtpPass.slice(-4) : '❌ CHƯA SET',
+      SMTP_FROM: process.env.SMTP_FROM || '(auto)',
+    },
+    transporterExists: !!transporter,
+    verifyResult: null,
+  };
+
+  if (!transporter) {
+    diag.verifyResult = { success: false, error: 'Transporter null – thiếu credentials' };
+    return diag;
+  }
+
+  try {
+    await transporter.verify();
+    diag.verifyResult = { success: true, message: 'SMTP kết nối OK' };
+  } catch (err) {
+    diag.verifyResult = {
+      success: false,
+      error: err.message,
+      code: err.code,
+      command: err.command,
+      response: err.response,
+    };
+  }
+
+  return diag;
 }
 
 /**
  * Gửi email xác thực tài khoản.
- * @param {string} toEmail  - Email người nhận
- * @param {string} toName   - Tên người nhận
- * @param {string} token    - UUID token xác thực
- * @param {string} baseUrl  - Base URL của server (auto-detect từ request)
  */
 async function sendVerificationEmail(toEmail, toName, token, baseUrl) {
   const base      = baseUrl || process.env.BASE_URL || 'http://localhost:3000';
   const verifyUrl = `${base}/api/auth/verify/${token}`;
 
-  const mailOptions = {
+  return sendMail({
     from:    getSender(),
     to:      toEmail,
     subject: '✅ Xác thực tài khoản – Army News VNAR',
@@ -100,30 +197,17 @@ async function sendVerificationEmail(toEmail, toName, token, baseUrl) {
       </body>
       </html>
     `,
-  };
-
-  try {
-    const info = await transporter.sendMail(mailOptions);
-    console.log(`[Email] ✅ Đã gửi email xác thực đến ${toEmail}:`, info.messageId);
-    return { success: true };
-  } catch (err) {
-    console.error(`[Email] ❌ Lỗi gửi email xác thực đến ${toEmail}:`, err.message);
-    return { success: false, error: err.message };
-  }
+  });
 }
 
 /**
  * Gửi email đặt lại mật khẩu.
- * @param {string} toEmail  - Email người nhận
- * @param {string} toName   - Tên người nhận
- * @param {string} token    - UUID token đặt lại mật khẩu
- * @param {string} baseUrl  - Base URL của server (auto-detect từ request)
  */
 async function sendPasswordResetEmail(toEmail, toName, token, baseUrl) {
   const base     = baseUrl || process.env.BASE_URL || 'http://localhost:3000';
   const resetUrl = `${base}/reset-password?token=${token}`;
 
-  const mailOptions = {
+  return sendMail({
     from:    getSender(),
     to:      toEmail,
     subject: '🔑 Đặt lại mật khẩu – Army News VNAR',
@@ -139,7 +223,7 @@ async function sendPasswordResetEmail(toEmail, toName, token, baseUrl) {
                        box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
           .header { background: #c0392b; padding: 32px; text-align: center; }
           .header h1 { color: #fff; margin: 0; font-size: 24px; letter-spacing: 1px; }
-          .header p  { color: rgba(255,255,255,0.85); margin: 4px 0 0; }\
+          .header p  { color: rgba(255,255,255,0.85); margin: 4px 0 0; }
           .body { padding: 32px; color: #333; line-height: 1.6; }
           .body h2 { margin-top: 0; color: #1a1a2e; }
           .btn { display: inline-block; margin: 24px 0; padding: 14px 32px;
@@ -178,16 +262,7 @@ async function sendPasswordResetEmail(toEmail, toName, token, baseUrl) {
       </body>
       </html>
     `,
-  };
-
-  try {
-    const info = await transporter.sendMail(mailOptions);
-    console.log(`[Email] ✅ Đã gửi email đặt lại mật khẩu đến ${toEmail}:`, info.messageId);
-    return { success: true };
-  } catch (err) {
-    console.error(`[Email] ❌ Lỗi gửi email reset đến ${toEmail}:`, err.message);
-    return { success: false, error: err.message };
-  }
+  });
 }
 
-module.exports = { sendVerificationEmail, sendPasswordResetEmail };
+module.exports = { sendVerificationEmail, sendPasswordResetEmail, diagnoseSmtp, sendMail };

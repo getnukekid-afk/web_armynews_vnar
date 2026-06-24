@@ -131,16 +131,26 @@ async function register(req, res) {
       'INSERT INTO email_tokens (user_id, token, expires_at) VALUES (?, ?, ?)'
     ).run(userId, token, expiresAt);
 
-    // 8. Gửi email xác thực (không block response nếu lỗi SMTP)
+    // 8. Gửi email xác thực (await để biết kết quả)
     const baseUrl = getBaseUrl(req);
-    sendVerificationEmail(email, name, token, baseUrl).catch(err =>
-      console.error('[Auth] Gửi email thất bại:', err.message)
-    );
+    let emailSent = false;
+    try {
+      const emailResult = await sendVerificationEmail(email, name, token, baseUrl);
+      emailSent = emailResult.success;
+      if (!emailSent) {
+        console.error(`[Auth] Gửi email xác thực thất bại cho ${email}:`, emailResult.error);
+      }
+    } catch (err) {
+      console.error('[Auth] Exception khi gửi email:', err.message);
+    }
 
-    console.log(`[Auth] Đăng ký thành công: ${email} (IP: ${ip}, Role: ${role})`);
+    console.log(`[Auth] Đăng ký thành công: ${email} (IP: ${ip}, Role: ${role}, Email sent: ${emailSent})`);
 
     return res.status(201).json({
-      message: 'Đăng ký thành công! Vui lòng kiểm tra email để xác thực tài khoản.',
+      message: emailSent
+        ? 'Đăng ký thành công! Vui lòng kiểm tra email để xác thực tài khoản.'
+        : 'Đăng ký thành công! Tuy nhiên không thể gửi email xác thực. Vui lòng liên hệ admin.',
+      emailSent,
       isFirstAdmin: role === 'admin',
     });
   } catch (err) {
@@ -319,11 +329,18 @@ async function forgotPassword(req, res) {
       'INSERT INTO password_reset_tokens (user_id, token, expires_at) VALUES (?, ?, ?)'
     ).run(user.id, token, expiresAt);
 
-    // Gửi email (không block response nếu lỗi SMTP)
+    // Gửi email
     const baseUrl = getBaseUrl(req);
-    sendPasswordResetEmail(user.email, user.name, token, baseUrl).catch(err =>
-      console.error('[Auth] Gửi email reset thất bại:', err.message)
-    );
+    let emailSent = false;
+    try {
+      const emailResult = await sendPasswordResetEmail(user.email, user.name, token, baseUrl);
+      emailSent = emailResult.success;
+      if (!emailSent) {
+        console.error(`[Auth] Gửi email reset thất bại cho ${user.email}:`, emailResult.error);
+      }
+    } catch (err) {
+      console.error('[Auth] Exception khi gửi email reset:', err.message);
+    }
 
     console.log(`[Auth] Quên mật khẩu: đã gửi link reset cho ${user.email}`);
     return res.json({ message: 'Nếu email tồn tại trong hệ thống, bạn sẽ nhận được hướng dẫn trong vài phút.' });

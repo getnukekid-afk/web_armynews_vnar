@@ -56,9 +56,12 @@ if (USE_RESEND) {
 function getSender() {
   // Resend: phải dùng domain đã verify, hoặc onboarding@resend.dev
   if (USE_RESEND) {
-    // Nếu user đã verify domain riêng trên Resend → dùng SMTP_FROM
-    const from = process.env.RESEND_FROM || process.env.SMTP_FROM;
-    if (from && !from.includes('your_email@')) return from;
+    // Resend: CHỈ dùng RESEND_FROM nếu đã verify domain riêng
+    // KHÔNG fallback sang SMTP_FROM (gmail.com không verify được trên Resend)
+    const resendFrom = process.env.RESEND_FROM;
+    if (resendFrom && !resendFrom.includes('gmail.com') && !resendFrom.includes('your_email@')) {
+      return resendFrom;
+    }
     return 'Army News VNAR <onboarding@resend.dev>';
   }
   // SMTP: dùng SMTP_FROM hoặc SMTP_USER

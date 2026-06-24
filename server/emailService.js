@@ -1,153 +1,187 @@
 // =============================================
-// emailService.js – Dịch vụ gửi email (Nodemailer)
+// emailService.js – Dịch vụ gửi email
 // =============================================
-// Hỗ trợ: Gmail SMTP trực tiếp + Gmail OAuth2 (fallback)
-// Debug: chi tiết lỗi SMTP, connection test, env vars check
+// Hỗ trợ 2 transport:
+//   1. RESEND HTTP API (dùng cho Render.com / cloud) ← ưu tiên
+//   2. SMTP / Nodemailer (dùng cho local dev)
+//
+// Render.com free tier chặn SMTP (port 25/465/587).
+// Resend.com miễn phí 100 email/ngày, dùng built-in fetch().
 
 require('dotenv').config();
-const nodemailer = require('nodemailer');
 
-// ─── Diagnostics: log cấu hình SMTP khi khởi động ───
-const smtpUser = process.env.SMTP_USER;
-const smtpPass = process.env.SMTP_PASS;
-const smtpHost = process.env.SMTP_HOST || 'smtp.gmail.com';
-const smtpPort = parseInt(process.env.SMTP_PORT) || 587;
+// ─── Detect transport mode ───────────────────
+const RESEND_API_KEY = process.env.RESEND_API_KEY;
+const USE_RESEND     = !!RESEND_API_KEY;
 
-console.log('[Email] ── Cấu hình SMTP ──');
-console.log(`[Email]   HOST : ${smtpHost}`);
-console.log(`[Email]   PORT : ${smtpPort}`);
-console.log(`[Email]   USER : ${smtpUser || '❌ CHƯA SET'}`);
-console.log(`[Email]   PASS : ${smtpPass ? `✅ (${smtpPass.length} ký tự)` : '❌ CHƯA SET'}`);
-console.log(`[Email]   FROM : ${process.env.SMTP_FROM || '(auto)'}`);
+let nodemailerTransporter = null;
 
-// ─── Tạo transporter ────────────────────────
-let transporter = null;
+if (USE_RESEND) {
+  console.log('[Email] ✅ Transport: Resend HTTP API');
+} else {
+  // Fallback: SMTP / Nodemailer (chỉ dùng cho local dev)
+  const nodemailer = require('nodemailer');
+  const smtpUser   = process.env.SMTP_USER;
+  const smtpPass   = process.env.SMTP_PASS;
+  const smtpHost   = process.env.SMTP_HOST || 'smtp.gmail.com';
+  const smtpPort   = parseInt(process.env.SMTP_PORT) || 587;
 
-function createTransporter() {
-  // Nếu thiếu credentials → không tạo transporter
-  if (!smtpUser || !smtpPass) {
-    console.error('[Email] ❌ SMTP_USER hoặc SMTP_PASS chưa được cấu hình!');
-    return null;
-  }
+  console.log('[Email] ⚠️  Transport: SMTP (Nodemailer)');
+  console.log(`[Email]    HOST: ${smtpHost}:${smtpPort}`);
+  console.log(`[Email]    USER: ${smtpUser || '❌ CHƯA SET'}`);
 
-  const t = nodemailer.createTransport({
-    host:   smtpHost,
-    port:   smtpPort,
-    secure: smtpPort === 465,  // true cho 465, false cho 587
-    auth: {
-      user: smtpUser,
-      pass: smtpPass,
-    },
-    // Timeout settings — Render.com có thể chậm kết nối SMTP
-    connectionTimeout: 10000,  // 10s chờ kết nối
-    greetingTimeout:   10000,  // 10s chờ server greeting
-    socketTimeout:     15000,  // 15s chờ response
-    // Debug
-    logger: false,
-    debug:  false,
-  });
-
-  // Verify kết nối async
-  t.verify()
-    .then(() => console.log('[Email] ✅ SMTP kết nối thành công!'))
-    .catch(err => {
-      console.error('[Email] ❌ SMTP verify thất bại:', err.message);
-      console.error('[Email]    Full error:', JSON.stringify({
-        code: err.code,
-        command: err.command,
-        response: err.response,
-      }));
+  if (smtpUser && smtpPass) {
+    nodemailerTransporter = nodemailer.createTransport({
+      host:   smtpHost,
+      port:   smtpPort,
+      secure: smtpPort === 465,
+      auth:   { user: smtpUser, pass: smtpPass },
+      connectionTimeout: 10000,
+      greetingTimeout:   10000,
+      socketTimeout:     15000,
     });
 
-  return t;
+    nodemailerTransporter.verify()
+      .then(() => console.log('[Email] ✅ SMTP kết nối thành công!'))
+      .catch(err => {
+        console.error('[Email] ❌ SMTP verify thất bại:', err.message);
+        console.error('[Email]    Nếu trên cloud → set RESEND_API_KEY để dùng Resend HTTP API.');
+      });
+  } else {
+    console.error('[Email] ❌ Thiếu SMTP_USER hoặc SMTP_PASS!');
+  }
 }
-
-transporter = createTransporter();
 
 // ─── Helper: địa chỉ gửi ────────────────────
 function getSender() {
+  // Resend: phải dùng domain đã verify, hoặc onboarding@resend.dev
+  if (USE_RESEND) {
+    // Nếu user đã verify domain riêng trên Resend → dùng SMTP_FROM
+    const from = process.env.RESEND_FROM || process.env.SMTP_FROM;
+    if (from && !from.includes('your_email@')) return from;
+    return 'Army News VNAR <onboarding@resend.dev>';
+  }
+  // SMTP: dùng SMTP_FROM hoặc SMTP_USER
   const from = process.env.SMTP_FROM;
   if (from && !from.includes('your_email@')) return from;
-  return `"Army News VNAR" <${smtpUser || 'no-reply@armynews.vn'}>`;
+  return `"Army News VNAR" <${process.env.SMTP_USER || 'no-reply@armynews.vn'}>`;
 }
 
-// ─── Core: gửi email với retry ───────────────
-async function sendMail(mailOptions) {
-  if (!transporter) {
-    const errMsg = 'SMTP transporter chưa được khởi tạo (thiếu SMTP_USER/SMTP_PASS).';
-    console.error(`[Email] ❌ ${errMsg}`);
-    return { success: false, error: errMsg };
+// ─── Core: gửi email qua Resend HTTP API ─────
+async function sendViaResend(to, subject, html) {
+  try {
+    const res = await fetch('https://api.resend.com/emails', {
+      method:  'POST',
+      headers: {
+        'Authorization': `Bearer ${RESEND_API_KEY}`,
+        'Content-Type':  'application/json',
+      },
+      body: JSON.stringify({
+        from:    getSender(),
+        to:      Array.isArray(to) ? to : [to],
+        subject: subject,
+        html:    html,
+      }),
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      console.error(`[Email] ❌ Resend API lỗi (${res.status}):`, JSON.stringify(data));
+      return { success: false, error: data.message || JSON.stringify(data) };
+    }
+
+    console.log(`[Email] ✅ Gửi thành công qua Resend đến ${to} – ID: ${data.id}`);
+    return { success: true, messageId: data.id };
+  } catch (err) {
+    console.error(`[Email] ❌ Resend fetch lỗi:`, err.message);
+    return { success: false, error: err.message };
+  }
+}
+
+// ─── Core: gửi email qua SMTP ────────────────
+async function sendViaSmtp(to, subject, html) {
+  if (!nodemailerTransporter) {
+    const msg = 'SMTP transporter chưa sẵn sàng. Set RESEND_API_KEY để dùng Resend.';
+    console.error(`[Email] ❌ ${msg}`);
+    return { success: false, error: msg };
   }
 
   try {
-    const info = await transporter.sendMail(mailOptions);
-    console.log(`[Email] ✅ Gửi thành công đến ${mailOptions.to} – MessageID: ${info.messageId}`);
+    const info = await nodemailerTransporter.sendMail({
+      from:    getSender(),
+      to:      to,
+      subject: subject,
+      html:    html,
+    });
+    console.log(`[Email] ✅ Gửi SMTP thành công đến ${to} – MessageID: ${info.messageId}`);
     return { success: true, messageId: info.messageId };
   } catch (err) {
-    console.error(`[Email] ❌ Gửi thất bại đến ${mailOptions.to}`);
-    console.error(`[Email]    Error: ${err.message}`);
-    console.error(`[Email]    Code: ${err.code || 'N/A'}`);
-    console.error(`[Email]    Command: ${err.command || 'N/A'}`);
-    console.error(`[Email]    Response: ${err.response || 'N/A'}`);
-
-    // Nếu lỗi authentication → log rõ hơn
-    if (err.code === 'EAUTH' || err.responseCode === 535) {
-      console.error('[Email] ⚠️  Lỗi xác thực Gmail! Kiểm tra:');
-      console.error('[Email]     1. SMTP_PASS phải là App Password (16 ký tự, không khoảng trắng)');
-      console.error('[Email]     2. Tạo tại: myaccount.google.com → Security → App passwords');
-      console.error('[Email]     3. Bật 2FA trước khi tạo App Password');
-    }
-
+    console.error(`[Email] ❌ SMTP gửi thất bại đến ${to}:`, err.message);
     return { success: false, error: err.message, code: err.code };
   }
 }
 
-// ─── Chẩn đoán SMTP (dùng cho test-smtp endpoint) ───
+// ─── Unified send (auto-chọn transport) ──────
+async function sendMail(mailOptions) {
+  const { to, subject, html, text } = mailOptions;
+  if (USE_RESEND) {
+    return sendViaResend(to, subject, html || text);
+  }
+  return sendViaSmtp(to, subject, html || text);
+}
+
+// ─── Chẩn đoán (dùng cho test endpoint) ──────
 async function diagnoseSmtp() {
   const diag = {
+    transport: USE_RESEND ? 'Resend HTTP API' : 'SMTP (Nodemailer)',
+    resendConfigured: !!RESEND_API_KEY,
+    smtpConfigured: !!(process.env.SMTP_USER && process.env.SMTP_PASS),
     envVars: {
-      SMTP_HOST: smtpHost,
-      SMTP_PORT: smtpPort,
-      SMTP_USER: smtpUser || '❌ CHƯA SET',
-      SMTP_PASS_LENGTH: smtpPass ? smtpPass.length : 0,
-      SMTP_PASS_HAS_SPACES: smtpPass ? smtpPass.includes(' ') : false,
-      SMTP_PASS_PREVIEW: smtpPass ? smtpPass.slice(0, 4) + '****' + smtpPass.slice(-4) : '❌ CHƯA SET',
+      RESEND_API_KEY: RESEND_API_KEY ? `✅ (${RESEND_API_KEY.slice(0, 8)}...)` : '❌ CHƯA SET',
+      SMTP_HOST: process.env.SMTP_HOST || '(chưa set)',
+      SMTP_PORT: process.env.SMTP_PORT || '(chưa set)',
+      SMTP_USER: process.env.SMTP_USER || '❌ CHƯA SET',
+      SMTP_PASS_LENGTH: process.env.SMTP_PASS ? process.env.SMTP_PASS.length : 0,
       SMTP_FROM: process.env.SMTP_FROM || '(auto)',
+      RESEND_FROM: process.env.RESEND_FROM || '(mặc định: onboarding@resend.dev)',
     },
-    transporterExists: !!transporter,
     verifyResult: null,
   };
 
-  if (!transporter) {
-    diag.verifyResult = { success: false, error: 'Transporter null – thiếu credentials' };
-    return diag;
-  }
-
-  try {
-    await transporter.verify();
-    diag.verifyResult = { success: true, message: 'SMTP kết nối OK' };
-  } catch (err) {
-    diag.verifyResult = {
-      success: false,
-      error: err.message,
-      code: err.code,
-      command: err.command,
-      response: err.response,
-    };
+  if (USE_RESEND) {
+    // Test Resend bằng cách gọi API domains endpoint
+    try {
+      const res = await fetch('https://api.resend.com/domains', {
+        headers: { 'Authorization': `Bearer ${RESEND_API_KEY}` },
+      });
+      const data = await res.json();
+      diag.verifyResult = res.ok
+        ? { success: true, message: 'Resend API key hợp lệ', domains: data.data?.map(d => d.name) || [] }
+        : { success: false, error: data.message || 'API key không hợp lệ' };
+    } catch (err) {
+      diag.verifyResult = { success: false, error: err.message };
+    }
+  } else if (nodemailerTransporter) {
+    try {
+      await nodemailerTransporter.verify();
+      diag.verifyResult = { success: true, message: 'SMTP kết nối OK' };
+    } catch (err) {
+      diag.verifyResult = { success: false, error: err.message, code: err.code };
+    }
+  } else {
+    diag.verifyResult = { success: false, error: 'Không có transport nào sẵn sàng' };
   }
 
   return diag;
 }
 
-/**
- * Gửi email xác thực tài khoản.
- */
+// ─── Email xác thực tài khoản ────────────────
 async function sendVerificationEmail(toEmail, toName, token, baseUrl) {
   const base      = baseUrl || process.env.BASE_URL || 'http://localhost:3000';
   const verifyUrl = `${base}/api/auth/verify/${token}`;
 
   return sendMail({
-    from:    getSender(),
     to:      toEmail,
     subject: '✅ Xác thực tài khoản – Army News VNAR',
     html: `
@@ -200,15 +234,12 @@ async function sendVerificationEmail(toEmail, toName, token, baseUrl) {
   });
 }
 
-/**
- * Gửi email đặt lại mật khẩu.
- */
+// ─── Email đặt lại mật khẩu ─────────────────
 async function sendPasswordResetEmail(toEmail, toName, token, baseUrl) {
   const base     = baseUrl || process.env.BASE_URL || 'http://localhost:3000';
   const resetUrl = `${base}/reset-password?token=${token}`;
 
   return sendMail({
-    from:    getSender(),
     to:      toEmail,
     subject: '🔑 Đặt lại mật khẩu – Army News VNAR',
     html: `
@@ -244,14 +275,14 @@ async function sendPasswordResetEmail(toEmail, toName, token, baseUrl) {
           </div>
           <div class="body">
             <h2>Xin chào, ${toName}!</h2>
-            <p>Chúng tôi nhận được yêu cầu <strong>đặt lại mật khẩu</strong> cho tài khoản của bạn tại <strong>Army News VNAR</strong>.</p>
+            <p>Chúng tôi nhận được yêu cầu <strong>đặt lại mật khẩu</strong> cho tài khoản của bạn.</p>
             <p>Nhấn nút bên dưới để tạo mật khẩu mới:</p>
             <a href="${resetUrl}" class="btn">🔑 Đặt lại mật khẩu</a>
             <div class="warning">
               ⏰ Link này chỉ có hiệu lực trong <strong>1 giờ</strong>. Sau đó bạn cần yêu cầu lại.
             </div>
             <p class="note">
-              Nếu bạn không yêu cầu đặt lại mật khẩu, hãy bỏ qua email này. Mật khẩu của bạn sẽ không thay đổi.<br><br>
+              Nếu bạn không yêu cầu đặt lại mật khẩu, hãy bỏ qua email này.<br><br>
               Hoặc copy link: <a href="${resetUrl}">${resetUrl}</a>
             </p>
           </div>

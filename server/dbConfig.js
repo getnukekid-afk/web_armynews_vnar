@@ -50,6 +50,17 @@ function initDatabase() {
     )
   `);
 
+  // --- Bảng PASSWORD_RESET_TOKENS (token đặt lại mật khẩu, hết hạn sau 1 giờ) ---
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS password_reset_tokens (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id    INTEGER NOT NULL,
+      token      TEXT    UNIQUE NOT NULL,
+      expires_at TEXT    NOT NULL,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    )
+  `);
+
   // --- Bảng CATEGORIES (danh mục tin tức) ---
   db.exec(`
     CREATE TABLE IF NOT EXISTS categories (

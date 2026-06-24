@@ -90,4 +90,80 @@ async function sendVerificationEmail(toEmail, toName, token) {
   }
 }
 
-module.exports = { sendVerificationEmail };
+/**
+ * Gửi email đặt lại mật khẩu.
+ * @param {string} toEmail  - Email người nhận
+ * @param {string} toName   - Tên người nhận
+ * @param {string} token    - UUID token đặt lại mật khẩu
+ */
+async function sendPasswordResetEmail(toEmail, toName, token) {
+  const resetUrl = `${process.env.BASE_URL}/reset-password?token=${token}`;
+
+  const mailOptions = {
+    from:    process.env.SMTP_FROM || '"Army News VNAR" <no-reply@armynews.vn>',
+    to:      toEmail,
+    subject: '🔑 Đặt lại mật khẩu – Army News VNAR',
+    html: `
+      <!DOCTYPE html>
+      <html lang="vi">
+      <head>
+        <meta charset="UTF-8">
+        <style>
+          body { font-family: Arial, sans-serif; background: #f5f5f5; margin: 0; padding: 0; }
+          .container { max-width: 560px; margin: 40px auto; background: #fff;
+                       border-radius: 8px; overflow: hidden;
+                       box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+          .header { background: #c0392b; padding: 32px; text-align: center; }
+          .header h1 { color: #fff; margin: 0; font-size: 24px; letter-spacing: 1px; }
+          .header p  { color: rgba(255,255,255,0.85); margin: 4px 0 0; }
+          .body { padding: 32px; color: #333; line-height: 1.6; }
+          .body h2 { margin-top: 0; color: #1a1a2e; }
+          .btn { display: inline-block; margin: 24px 0; padding: 14px 32px;
+                 background: #c0392b; color: #fff !important; text-decoration: none;
+                 border-radius: 6px; font-weight: bold; font-size: 16px; }
+          .warning { background: #fff8e1; border-left: 4px solid #f39c12;
+                     padding: 12px 16px; border-radius: 4px; margin-top: 16px; font-size: 13px; }
+          .note { font-size: 13px; color: #888; margin-top: 16px; }
+          .footer { background: #f0f0f0; padding: 16px; text-align: center;
+                    font-size: 12px; color: #999; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1>⚑ ARMY NEWS VNAR</h1>
+            <p>Báo Điện Tử Quân Đội Nhân Dân Việt Nam</p>
+          </div>
+          <div class="body">
+            <h2>Xin chào, ${toName}!</h2>
+            <p>Chúng tôi nhận được yêu cầu <strong>đặt lại mật khẩu</strong> cho tài khoản của bạn tại <strong>Army News VNAR</strong>.</p>
+            <p>Nhấn nút bên dưới để tạo mật khẩu mới:</p>
+            <a href="${resetUrl}" class="btn">🔑 Đặt lại mật khẩu</a>
+            <div class="warning">
+              ⏰ Link này chỉ có hiệu lực trong <strong>1 giờ</strong>. Sau đó bạn cần yêu cầu lại.
+            </div>
+            <p class="note">
+              Nếu bạn không yêu cầu đặt lại mật khẩu, hãy bỏ qua email này. Mật khẩu của bạn sẽ không thay đổi.<br><br>
+              Hoặc copy link: <a href="${resetUrl}">${resetUrl}</a>
+            </p>
+          </div>
+          <div class="footer">
+            © ${new Date().getFullYear()} Army News VNAR. Mọi quyền được bảo lưu.
+          </div>
+        </div>
+      </body>
+      </html>
+    `,
+  };
+
+  try {
+    const info = await transporter.sendMail(mailOptions);
+    console.log(`[Email] Đã gửi email đặt lại mật khẩu đến ${toEmail}:`, info.messageId);
+    return { success: true };
+  } catch (err) {
+    console.error('[Email] Lỗi gửi email reset:', err.message);
+    return { success: false, error: err.message };
+  }
+}
+
+module.exports = { sendVerificationEmail, sendPasswordResetEmail };

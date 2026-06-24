@@ -181,6 +181,91 @@ async function handleLogin() {
   }
 }
 
+// ─── QUÊN MẬT KHẨU (MODAL) ──────────────────
+function openForgotModal() {
+  const modal = document.getElementById('forgot-modal');
+  if (!modal) return;
+  // Reset trạng thái modal
+  document.getElementById('forgot-email').value  = '';
+  document.getElementById('forgot-email-error').textContent = '';
+  document.getElementById('forgot-email').classList.remove('error');
+  document.getElementById('forgot-alert').style.display = 'none';
+  document.getElementById('forgot-submit-btn').disabled  = false;
+  document.getElementById('forgot-submit-btn').textContent = 'Gửi email';
+  document.getElementById('forgot-email').readOnly = false;
+  modal.style.display = 'flex';
+  setTimeout(() => document.getElementById('forgot-email').focus(), 100);
+}
+
+function closeForgotModal() {
+  const modal = document.getElementById('forgot-modal');
+  if (modal) modal.style.display = 'none';
+}
+
+async function handleForgotPassword() {
+  const emailEl    = document.getElementById('forgot-email');
+  const emailErrEl = document.getElementById('forgot-email-error');
+  const alertEl    = document.getElementById('forgot-alert');
+  const alertIconEl = document.getElementById('forgot-alert-icon');
+  const alertTextEl = document.getElementById('forgot-alert-text');
+  const submitBtn  = document.getElementById('forgot-submit-btn');
+
+  // Reset errors
+  emailErrEl.textContent = '';
+  emailEl.classList.remove('error');
+  alertEl.style.display  = 'none';
+
+  const email = emailEl.value.trim();
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    emailErrEl.textContent = 'Vui lòng nhập địa chỉ email hợp lệ.';
+    emailEl.classList.add('error');
+    emailEl.focus();
+    return;
+  }
+
+  // Loading state
+  submitBtn.disabled    = true;
+  submitBtn.innerHTML   = '<span class="spinner" style="width:16px;height:16px;border-width:2px;margin-right:6px;"></span>Đang gửi...';
+
+  try {
+    const res  = await fetch('/api/auth/forgot-password', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ email }),
+    });
+    const data = await res.json();
+
+    if (!res.ok) {
+      // Lỗi server
+      alertEl.className      = 'alert alert-error';
+      alertIconEl.textContent = '⚠️';
+      alertTextEl.textContent = data.error || 'Có lỗi xảy ra. Vui lòng thử lại.';
+      alertEl.style.display  = 'flex';
+      submitBtn.disabled     = false;
+      submitBtn.textContent  = 'Gửi email';
+    } else {
+      // Thành công – hiện thông báo, khóa form
+      alertEl.className      = 'alert alert-success';
+      alertIconEl.textContent = '✅';
+      alertTextEl.textContent = data.message;
+      alertEl.style.display  = 'flex';
+      emailEl.readOnly       = true;
+      submitBtn.textContent  = '✅ Đã gửi';
+    }
+  } catch {
+    alertEl.className      = 'alert alert-error';
+    alertIconEl.textContent = '⚠️';
+    alertTextEl.textContent = 'Lỗi kết nối. Vui lòng thử lại.';
+    alertEl.style.display  = 'flex';
+    submitBtn.disabled     = false;
+    submitBtn.textContent  = 'Gửi email';
+  }
+}
+
+// Đóng modal khi nhấn Escape
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') closeForgotModal();
+});
 // ─── ĐĂNG KÝ ────────────────────────────────
 async function handleRegister() {
   clearAllErrors();

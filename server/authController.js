@@ -7,7 +7,7 @@
 const bcrypt       = require('bcryptjs');
 const { v4: uuidv4 } = require('uuid');
 const db           = require('./dbConfig');
-const { sendVerificationEmail } = require('./emailService');
+const { sendVerificationEmail, sendPasswordResetEmail } = require('./emailService');
 
 // ─────────────────────────────────────────────
 // HELPER: Xác thực Google reCAPTCHA v2 token
@@ -268,6 +268,100 @@ function requireRole(...roles) {
 }
 
 // ─────────────────────────────────────────────
+// QUÊN MẬT KHẨU – POST /api/auth/forgot-password
+// Gửi email chứa link đặt lại mật khẩu (hết hạn sau 1 giờ)
+// ─────────────────────────────────────────────
+async function forgotPassword(req, res) {
+  const { email } = req.body;
+
+  if (!email) {
+    return res.status(400).json({ error: 'Vui lòng nhập địa chỉ email.' });
+  }
+
+  try {
+    // Tìm user theo email
+    const user = db
+      .prepare('SELECT id, name, email FROM users WHERE email = ?')
+      .get(email.toLowerCase());
+
+    // Bảo mật: luôn trả về thành công dù email có tồn tại hay không
+    // (tránh leak thông tin tài khoản)
+    if (!user) {
+      console.log(`[Auth] Quên mật khẩu: email không tồn tại: ${email}`);
+      return res.json({ message: 'Nếu email tồn tại trong hệ thống, bạn sẽ nhận được hướng dẫn trong vài phút.' });
+    }
+
+    // Xóa token cũ của user này (nếu có)
+    db.prepare('DELETE FROM password_reset_tokens WHERE user_id = ?').run(user.id);
+
+    // Tạo token mới (UUID), hết hạn sau 1 giờ
+    const token     = uuidv4();
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+    db.prepare(
+      'INSERT INTO password_reset_tokens (user_id, token, expires_at) VALUES (?, ?, ?)'
+    ).run(user.id, token, expiresAt);
+
+    // Gửi email (không block response nếu lỗi SMTP)
+    sendPasswordResetEmail(user.email, user.name, token).catch(err =>
+      console.error('[Auth] Gửi email reset thất bại:', err.message)
+    );
+
+    console.log(`[Auth] Quên mật khẩu: đã gửi link reset cho ${user.email}`);
+    return res.json({ message: 'Nếu email tồn tại trong hệ thống, bạn sẽ nhận được hướng dẫn trong vài phút.' });
+  } catch (err) {
+    console.error('[Auth] Lỗi quên mật khẩu:', err);
+    return res.status(500).json({ error: 'Lỗi máy chủ. Vui lòng thử lại sau.' });
+  }
+}
+
+// ─────────────────────────────────────────────
+// ĐẶT LẠI MẬT KHẨU – POST /api/auth/reset-password
+// Xác thực token và cập nhật mật khẩu mới
+// ─────────────────────────────────────────────
+async function resetPassword(req, res) {
+  const { token, password } = req.body;
+
+  if (!token || !password) {
+    return res.status(400).json({ error: 'Dữ liệu không hợp lệ.' });
+  }
+  if (password.length < 6) {
+    return res.status(400).json({ error: 'Mật khẩu phải có ít nhất 6 ký tự.' });
+  }
+
+  try {
+    // Kiểm tra token tồn tại
+    const record = db
+      .prepare('SELECT * FROM password_reset_tokens WHERE token = ?')
+      .get(token);
+
+    if (!record) {
+      return res.status(400).json({ error: 'Link đặt lại mật khẩu không hợp lệ.' });
+    }
+
+    // Kiểm tra hết hạn
+    if (new Date(record.expires_at) < new Date()) {
+      db.prepare('DELETE FROM password_reset_tokens WHERE id = ?').run(record.id);
+      return res.status(400).json({ error: 'Link đặt lại mật khẩu đã hết hạn. Vui lòng yêu cầu lại.' });
+    }
+
+    // Hash mật khẩu mới
+    const passwordHash = await bcrypt.hash(password, 12);
+
+    // Cập nhật mật khẩu
+    db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(passwordHash, record.user_id);
+
+    // Xóa token đã dùng
+    db.prepare('DELETE FROM password_reset_tokens WHERE id = ?').run(record.id);
+
+    console.log(`[Auth] Đặt lại mật khẩu thành công cho user_id: ${record.user_id}`);
+    return res.json({ message: 'Mật khẩu đã được đặt lại thành công!' });
+  } catch (err) {
+    console.error('[Auth] Lỗi đặt lại mật khẩu:', err);
+    return res.status(500).json({ error: 'Lỗi máy chủ. Vui lòng thử lại sau.' });
+  }
+}
+
+// ─────────────────────────────────────────────
 // API: Lấy thông tin user hiện tại
 // GET /api/auth/me
 // ─────────────────────────────────────────────
@@ -289,6 +383,8 @@ module.exports = {
   login,
   logout,
   verifyEmail,
+  forgotPassword,
+  resetPassword,
   isAuthenticated,
   requireRole,
   getMe,

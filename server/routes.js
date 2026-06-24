@@ -29,6 +29,8 @@ router.post('/api/auth/login',    auth.login);
 router.post('/api/auth/logout',   auth.logout);
 router.get('/api/auth/verify/:token', auth.verifyEmail);
 router.get('/api/auth/me',        auth.getMe);
+router.post('/api/auth/forgot-password', auth.forgotPassword);
+router.post('/api/auth/reset-password',  auth.resetPassword);
 
 // ═══════════════════════════════════════════
 // NEWS ROUTES – Yêu cầu đăng nhập
@@ -101,6 +103,7 @@ router.get('/', (req, res) => {
 router.get('/login',        (req, res) => res.sendFile(path.join(viewsDir, 'login.html')));
 router.get('/register',     (req, res) => res.sendFile(path.join(viewsDir, 'register.html')));
 router.get('/verify-email', (req, res) => res.sendFile(path.join(viewsDir, 'verify-email.html')));
+router.get('/reset-password', (req, res) => res.sendFile(path.join(viewsDir, 'reset-password.html')));
 
 // Trang đọc bài – yêu cầu đăng nhập
 router.get('/article/:id', (req, res) => {
